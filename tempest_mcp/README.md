@@ -31,14 +31,38 @@ Codex, GitHub Copilot, etc.).
 
 ## Install
 
-Requires Python 3.10+.
+Requires Python 3.10+. Run these from inside `tempest_mcp/` (the folder this
+README is in) — the venv and the package must live together since Tempest
+reads `config/tempest.default.yaml` via a filesystem-relative path.
+
+**Windows (PowerShell):**
 
 ```powershell
+cd tempest_mcp
 python -m venv .venv
-.venv\Scripts\pip install -e .
+.venv\Scripts\python.exe -m ensurepip --upgrade   # only needed if the next line errors "No module named pip"
+.venv\Scripts\python.exe -m pip install -e .
+```
+
+Always call scripts as `.venv\Scripts\python.exe` (or prefix with `.\`) —
+PowerShell parses a bare `.venv\Scripts\pip` as a module-qualified command
+name and fails with an `Import-Module` error, not a real path.
+
+**macOS / Linux:**
+
+```bash
+cd tempest_mcp
+python3 -m venv .venv
+source .venv/bin/activate
+python -m pip install -e .
 ```
 
 This pulls in `graphifyy`, `networkx`, `mcp`, and `pyyaml` automatically.
+
+> If `python -m venv` produces a venv with no `pip`/`pip.exe` in
+> `Scripts`/`bin` (rare, but happens with some system Python installs), run
+> `python -m ensurepip --upgrade` inside that venv first — no need to
+> recreate it.
 
 ## Register with an MCP client
 
@@ -197,8 +221,8 @@ Tempest does this automatically on first sync):
 ## Development
 
 ```powershell
-.venv\Scripts\pip install -e ".[dev]"
-.venv\Scripts\pytest tests/ -v
+.venv\Scripts\python.exe -m pip install -e ".[dev]"
+.venv\Scripts\python.exe -m pytest tests/ -v
 ```
 
 Test fixtures live in `tests/fixtures/`:
