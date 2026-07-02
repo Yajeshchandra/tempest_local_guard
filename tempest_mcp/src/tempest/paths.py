@@ -39,8 +39,8 @@ class RepoPaths:
 
     @property
     def graph_json(self) -> Path:
-        # graphify writes graph.json inside <out>/graphify-out/graph.json
-        # when invoked with --out <tempest_dir>.
+        # graphify update writes graph.json into <repo>/<GRAPHIFY_OUT>, and we
+        # set GRAPHIFY_OUT=.tempest/graphify-out (see rie/sync.py).
         return self.graphify_out_dir / GRAPH_JSON_NAME
 
     @property

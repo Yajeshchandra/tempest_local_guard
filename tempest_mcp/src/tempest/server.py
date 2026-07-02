@@ -34,7 +34,7 @@ mcp = FastMCP("tempest")
 def tempest_sync(repo_path: str) -> dict[str, Any]:
     """Build or refresh Tempest's understanding of a repository.
 
-    Runs `graphify extract` on the given repo, loads the resulting code
+    Runs `graphify update` (AST-only, no LLM) on the given repo, loads the resulting code
     graph, and caches it under `<repo_path>/.tempest/`. Call this before
     `tempest_detect`. Safe to re-run at any time (e.g. after code changes)
     to refresh the cached graph.

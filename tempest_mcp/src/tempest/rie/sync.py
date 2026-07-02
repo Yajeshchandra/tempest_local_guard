@@ -1,6 +1,6 @@
-"""Subprocess wrapper around `graphify extract`.
+"""Subprocess wrapper around `graphify update`.
 
-Tempest treats `graphify extract` as a black-box graph builder and
+Tempest treats `graphify update` as a black-box graph builder and
 `graph.json` (standard NetworkX node-link JSON) as the sole data contract.
 We never import graphify internals and never talk to graphify's own MCP
 server — we shell out to its CLI exactly as a developer would.
@@ -9,6 +9,7 @@ server — we shell out to its CLI exactly as a developer would.
 from __future__ import annotations
 
 import json
+import os
 import shutil
 import subprocess
 import sys
@@ -16,7 +17,7 @@ import time
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from tempest.paths import RepoPaths
+from tempest.paths import GRAPHIFY_OUT_DIR_NAME, TEMPEST_DIR_NAME, RepoPaths
 from tempest.rie.branch_state import get_branch_state
 
 
@@ -25,7 +26,7 @@ class GraphifyNotFoundError(RuntimeError):
 
 
 class GraphifyExtractError(RuntimeError):
-    """Raised when `graphify extract` exits non-zero or produces no graph.json."""
+    """Raised when `graphify update` exits non-zero or produces no graph.json."""
 
 
 @dataclass
@@ -84,7 +85,13 @@ def _find_graphify_executable() -> str:
 
 
 def run_graphify_extract(repo_root: str | Path, timeout_seconds: int = 600) -> Path:
-    """Run `graphify extract <repo_root> --out <repo_root>/.tempest`.
+    """Run `graphify update <repo_root>` (AST-only, no LLM) with output
+    redirected into `<repo_root>/.tempest/graphify-out`.
+
+    `graphify extract` also does semantic LLM extraction of docs/images and
+    hard-fails without an API key (or silently calls out to whatever LLM key
+    happens to be in the environment) — `update` is graphify's AST-only path
+    and is all Tempest's graph needs, matching the "fully local" guarantee.
 
     Returns the path to the resulting graph.json. Raises GraphifyExtractError
     on failure or if the expected output file is missing afterward.
@@ -97,12 +104,13 @@ def run_graphify_extract(repo_root: str | Path, timeout_seconds: int = 600) -> P
 
     cmd = [
         graphify_exe,
-        "extract",
+        "update",
         str(paths.repo_root),
-        "--out",
-        str(paths.tempest_dir),
         "--no-cluster",
+        "--force",
     ]
+    # `update` has no --out flag; it writes to <repo_root>/<GRAPHIFY_OUT>.
+    env = {**os.environ, "GRAPHIFY_OUT": f"{TEMPEST_DIR_NAME}/{GRAPHIFY_OUT_DIR_NAME}"}
 
     try:
         proc = subprocess.run(
@@ -112,23 +120,24 @@ def run_graphify_extract(repo_root: str | Path, timeout_seconds: int = 600) -> P
             timeout=timeout_seconds,
             cwd=str(paths.repo_root),
             stdin=subprocess.DEVNULL,
+            env=env,
         )
     except subprocess.TimeoutExpired as exc:
         raise GraphifyExtractError(
-            f"`graphify extract` timed out after {timeout_seconds}s"
+            f"`graphify update` timed out after {timeout_seconds}s"
         ) from exc
     except OSError as exc:
         raise GraphifyExtractError(f"Failed to launch graphify: {exc}") from exc
 
     if proc.returncode != 0:
         raise GraphifyExtractError(
-            f"`graphify extract` exited with code {proc.returncode}.\n"
+            f"`graphify update` exited with code {proc.returncode}.\n"
             f"stdout:\n{proc.stdout}\nstderr:\n{proc.stderr}"
         )
 
     if not paths.graph_json.exists():
         raise GraphifyExtractError(
-            f"`graphify extract` completed but no graph.json was found at "
+            f"`graphify update` completed but no graph.json was found at "
             f"{paths.graph_json}.\nstdout:\n{proc.stdout}\nstderr:\n{proc.stderr}"
         )
 
@@ -136,7 +145,7 @@ def run_graphify_extract(repo_root: str | Path, timeout_seconds: int = 600) -> P
 
 
 def sync_repo(repo_root: str | Path, timeout_seconds: int = 600) -> SyncResult:
-    """Full sync: run graphify extract, record branch state, write last_sync.json."""
+    """Full sync: run graphify update, record branch state, write last_sync.json."""
     start = time.monotonic()
     paths = RepoPaths(repo_root)
 
