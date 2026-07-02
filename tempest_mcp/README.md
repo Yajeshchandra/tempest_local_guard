@@ -11,9 +11,9 @@ Codex, GitHub Copilot, etc.).
 ## How it works
 
 1. **`tempest_sync`** shells out to [`graphify`](https://pypi.org/project/graphifyy/)
-   (`graphify extract <repo>`) to build a code graph of the target repository —
-   an AST-derived call/import/containment graph, no LLM required for pure code
-   repos. The resulting `graph.json` (standard NetworkX node-link format) is
+   (`graphify update <repo>`, AST-only — no LLM, no API key) to build a code
+   graph of the target repository — an AST-derived call/import/containment
+   graph. The resulting `graph.json` (standard NetworkX node-link format) is
    cached under `<repo>/.tempest/`.
 2. Tempest classifies every node as **PROD** or **NON-PROD** using an ordered
    heuristic chain (manual overrides > path globs > env-file markers > folder
@@ -31,25 +31,68 @@ Codex, GitHub Copilot, etc.).
 
 ## Install
 
-Requires Python 3.10+ and [`pipx`](https://pipx.pypa.io/) (or
-[`uv`](https://docs.astral.sh/uv/)). One command, from a checkout of this repo:
+Installing Tempest gives you one command on your `PATH`, `tempest-server`, which
+is the MCP server every client below points at. This is the **same on every
+device** — no absolute venv paths to edit.
+
+### Prerequisites
+
+- **Python 3.10 or newer** — check with `python --version` (or `python3 --version`).
+- **[`pipx`](https://pipx.pypa.io/)** or **[`uv`](https://docs.astral.sh/uv/)** —
+  either one installs Tempest into an isolated environment so its dependencies
+  don't collide with anything else on your machine.
+  - Get pipx: `python -m pip install --user pipx && python -m pipx ensurepath`
+    (then reopen your terminal so `pipx` is on `PATH`).
+  - Or get uv: see [the uv install docs](https://docs.astral.sh/uv/getting-started/installation/).
+- **Git**, to clone this repo.
+
+### Steps
+
+1. **Clone the repo:**
+
+   ```bash
+   git clone https://github.com/Prabhat-Kr-Sahu/tempest_local_guard.git
+   cd tempest_local_guard
+   ```
+
+2. **Install the `tempest-server` command** (pick one):
+
+   ```bash
+   pipx install ./tempest_mcp          # with pipx
+   # or
+   uv tool install ./tempest_mcp       # with uv
+   ```
+
+   This pulls in `graphifyy`, `networkx`, `mcp`, and `pyyaml` automatically —
+   no separate `graphify` install needed.
+
+3. **Verify it's on your PATH:**
+
+   ```bash
+   tempest-server
+   ```
+
+   `tempest-server` takes no arguments — it starts and waits on stdin for an MCP
+   client to connect, which looks like a hang. That's expected; press **Ctrl-C**
+   to quit. If the shell instead reports "command not found", your pipx/uv bin
+   dir isn't on `PATH` — run `pipx ensurepath` (or `uv tool update-shell`) and
+   reopen the terminal.
+
+### Updating later
+
+Pull the repo and reinstall in place:
 
 ```bash
-git clone <this-repo>
-pipx install ./tempest_mcp        # or: uv tool install ./tempest_mcp
+git pull
+pipx install --force ./tempest_mcp     # uv: uv tool install --force ./tempest_mcp
 ```
 
-That puts a `tempest-server` command on your `PATH` in its own isolated
-environment, pulling in `graphifyy`, `networkx`, `mcp`, and `pyyaml`
-automatically. Because it's on `PATH`, every MCP client config below is just
-`command: "tempest-server"` — the **same on every device**, no absolute paths.
-
-Verify: `tempest-server` should start and wait on stdin (Ctrl-C to quit).
-
-> No pipx/uv? `pipx` ships with recent Python (`python -m pipx ...`), or
-> install with `python -m pip install --user pipx`.
-
 ## Register with an MCP client
+
+Point your agent at the `tempest-server` command you installed above. Pick the
+client you use — the config shape is the same everywhere: a stdio server whose
+`command` is `tempest-server`. After registering, confirm the four `tempest_*`
+tools show up (e.g. `/mcp` in Claude Code / Codex) before using them.
 
 ### Claude Code
 
@@ -130,21 +173,83 @@ mis-invoke tool schemas, which matters here since `tempest_detect`'s
 structured JSON is meant to be read and explained by the model, not just
 echoed back.
 
-## Usage
+## Using the tools
 
-Ask your agent, in natural language, something like:
+You normally **don't call these tools by hand** — you ask your coding agent in
+plain language and it picks the right tool with the right arguments. Every tool
+takes a `repo_path` (the **absolute** path to the repo you want scanned); the
+agent usually infers this from your open workspace.
 
-> "Check this repo for non-prod-to-prod data leaks."
+The typical flow is two tools, in order:
 
-The agent will call `tempest_sync` (build/refresh the graph) then
-`tempest_detect` (run the rules) and explain the structured findings.
+> **You:** "Check this repo for non-prod-to-prod data leaks."
+>
+> The agent calls **`tempest_sync`** to build the graph, then **`tempest_detect`**
+> to run the rules, and explains the findings in plain English.
 
-### Tools
+Below is what each tool does, when it runs, and how to steer it.
+
+### `tempest_sync(repo_path)` — build/refresh the graph
+
+Run this **first**, and again after you change code. It runs `graphify update`
+on the repo and caches the resulting graph under `<repo>/.tempest/`. Safe to
+re-run any time.
+
+> "Sync this repo so Tempest has a fresh graph."
+
+Returns node/edge counts, the current git branch and commit, and a **warning if
+you're not on the repo's default branch** (Tempest assumes prod tracks
+`main`/`master`, so scanning a feature branch may misclassify).
+
+### `tempest_detect(repo_path)` — run the leak rules
+
+Requires a prior `tempest_sync`. Runs reverse reachability from every Production
+Boundary Node and evaluates all three policy rules, then **saves the report** to
+the local SQLite DB.
+
+> "Now run leak detection and tell me what's risky."
+
+Returns a structured report: summary counts plus a list of findings, each with
+`rule` (a/b/c), `severity`, `source_node`/`target_node`, an evidence `path`, and
+a suggested fix. Ask the agent to "explain finding 1" or "show me the path" to
+drill in.
+
+### `tempest_get_report(repo_path, scan_id=None)` — re-fetch a past scan
+
+Cheap re-read of a previous `tempest_detect` result **without re-running
+detection**. Omit `scan_id` for the latest scan; it also returns `scan_history`
+so you can pick an older one.
+
+> "Show me the last leak report again."
+> "Compare the current findings with scan &lt;id&gt; from earlier."
+
+### `tempest_classify_boundary(repo_path, node_id, ...)` — inspect or override a classification
+
+Two modes:
+
+- **Inspect** (pass only `node_id`): see why a node was tagged PROD/NON-PROD/PBN
+  and the heuristics behind it. Use `node_id` values straight from a finding's
+  `source_node`/`target_node`.
+
+  > "Why did Tempest classify &lt;node_id&gt; as production?"
+
+- **Override** (pass any of `set_env_tag`, `set_is_pbn`, `set_pbn_type`): pin a
+  manual classification that **wins over every heuristic** on future scans.
+  Stored in `<repo>/.tempest/boundary_overrides.json`.
+
+  > "That's a test double, not prod — mark &lt;node_id&gt; as NON_PROD."
+  > "Treat &lt;node_id&gt; as a production database boundary node."
+
+Use overrides to kill false positives (a node wrongly seen as prod) or false
+negatives (a real prod boundary the heuristics missed), then re-run
+`tempest_detect`.
+
+### Quick reference
 
 | Tool | Purpose |
 |---|---|
 | `tempest_sync(repo_path)` | Build/refresh the graph for a repo. Run this first, and again after code changes. |
-| `tempest_detect(repo_path)` | Run all 3 policy rules and return a structured leak report. |
+| `tempest_detect(repo_path)` | Run all 3 policy rules and return (and persist) a structured leak report. |
 | `tempest_get_report(repo_path, scan_id=None)` | Re-fetch a previous scan (default: latest) plus scan history, without re-running detection. |
 | `tempest_classify_boundary(repo_path, node_id, set_env_tag=None, set_is_pbn=None, set_pbn_type=None)` | Inspect why a node was classified PROD/NON-PROD/PBN, or set a manual override. |
 
@@ -190,7 +295,7 @@ Tempest does this automatically on first sync):
   NON-PROD (a deliberate choice to avoid false negatives on leak detection,
   at the cost of occasionally treating an unrelated NON-PROD node as a
   reachability ancestor).
-- Detection quality depends entirely on `graphify extract`'s AST coverage
+- Detection quality depends entirely on `graphify update`'s AST coverage
   for the target language/framework.
 
 ## Development
