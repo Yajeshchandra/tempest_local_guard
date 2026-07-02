@@ -48,12 +48,14 @@ device** — no absolute venv paths to edit.
 
 ### Steps
 
-1. **Clone the repo:**
+1. **Copy or Download the repo:**
 
    ```bash
    git clone https://github.com/Prabhat-Kr-Sahu/tempest_local_guard.git
    cd tempest_local_guard
    ```
+
+   copy the repo  to  your device
 
 2. **Install the `tempest-server` command** (pick one):
 
