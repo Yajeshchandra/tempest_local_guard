@@ -27,11 +27,20 @@ class BranchState:
 def _run_git(repo_root: Path, *args: str) -> str | None:
     try:
         proc = subprocess.run(
-            ["git", *args],
+            # -c core.fsmonitor=false: in a repo with core.fsmonitor=true, the
+            # first git command spawns a detached `git fsmonitor--daemon` that
+            # inherits our capture_output pipe and holds it open forever, so
+            # communicate() never sees EOF and hangs — even with timeout set,
+            # because the child exits but the pipe stays open (the sync then
+            # wedges after graphify already finished). These are one-shot reads
+            # that don't benefit from fsmonitor. stdin=DEVNULL so a credential
+            # helper can't block on a prompt either.
+            ["git", "-c", "core.fsmonitor=false", *args],
             cwd=str(repo_root),
             capture_output=True,
             text=True,
             timeout=15,
+            stdin=subprocess.DEVNULL,
         )
     except (OSError, subprocess.TimeoutExpired):
         return None
