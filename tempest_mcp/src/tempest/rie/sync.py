@@ -111,6 +111,14 @@ def run_graphify_extract(repo_root: str | Path, timeout_seconds: int = 600) -> P
     ]
     # `update` has no --out flag; it writes to <repo_root>/<GRAPHIFY_OUT>.
     env = {**os.environ, "GRAPHIFY_OUT": f"{TEMPEST_DIR_NAME}/{GRAPHIFY_OUT_DIR_NAME}"}
+    # ponytail: on Windows, graphify's parallel ProcessPoolExecutor workers can
+    # inherit our capture_output pipe and hold it open after graph.json is
+    # written, hanging communicate() forever. graphify's own git hook forces
+    # sequential extraction for this exact "agent shell fragile pipe" case
+    # (graphify/hooks.py); mirror it. Drop this if graphify stops leaking the
+    # pipe, or switch extraction to file-redirected stdout instead of PIPE.
+    if sys.platform == "win32":
+        env.setdefault("GRAPHIFY_MAX_WORKERS", "1")
 
     try:
         proc = subprocess.run(
