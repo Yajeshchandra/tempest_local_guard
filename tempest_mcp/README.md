@@ -66,17 +66,24 @@ This pulls in `graphifyy`, `networkx`, `mcp`, and `pyyaml` automatically.
 
 ## Register with an MCP client
 
-Tempest is a plain stdio MCP server, so any MCP-capable client works. Every
-config below points at the same command — swap in your actual venv path:
+`pip install -e .` installs a `tempest-server` console-script entry point
+(defined in `pyproject.toml`'s `[project.scripts]`) straight into the venv's
+`Scripts`/`bin` folder — so every client below points at the same one
+command, no need to spell out `python -m tempest.server`:
 
-```
-C:\path\to\tempest_mcp\.venv\Scripts\python.exe -m tempest.server
-```
+- Windows: `C:\path\to\tempest_mcp\.venv\Scripts\tempest-server.exe`
+- macOS/Linux: `/path/to/tempest_mcp/.venv/bin/tempest-server`
+
+Swap in your actual venv path in the examples below.
 
 ### Claude Code
 
 ```powershell
-claude mcp add tempest -- C:\path\to\tempest_mcp\.venv\Scripts\python.exe -m tempest.server
+claude mcp add tempest -- C:\path\to\tempest_mcp\.venv\Scripts\tempest-server.exe
+```
+
+```bash
+claude mcp add tempest -- /path/to/tempest_mcp/.venv/bin/tempest-server
 ```
 
 `-s user` instead of the default `-s local` registers it for every project,
@@ -92,29 +99,31 @@ VS Code: add to `.vscode/mcp.json` (workspace) or your user `mcp.json`:
   "servers": {
     "tempest": {
       "type": "stdio",
-      "command": "C:\\path\\to\\tempest_mcp\\.venv\\Scripts\\python.exe",
-      "args": ["-m", "tempest.server"]
+      "command": "C:\\path\\to\\tempest_mcp\\.venv\\Scripts\\tempest-server.exe"
     }
   }
 }
 ```
 
+(macOS/Linux: `"command": "/path/to/tempest_mcp/.venv/bin/tempest-server"`.)
+
 Copilot CLI: `copilot mcp add` (interactive), or edit its MCP config file
-directly with the same `command`/`args` shape as above.
+directly with the same `command` shape as above.
 
 ### Codex CLI
 
 ```powershell
-codex mcp add tempest -- C:\path\to\tempest_mcp\.venv\Scripts\python.exe -m tempest.server
+codex mcp add tempest -- C:\path\to\tempest_mcp\.venv\Scripts\tempest-server.exe
 ```
 
 Or add directly to `~/.codex/config.toml`:
 
 ```toml
 [mcp_servers.tempest]
-command = "C:\\path\\to\\tempest_mcp\\.venv\\Scripts\\python.exe"
-args = ["-m", "tempest.server"]
+command = "C:\\path\\to\\tempest_mcp\\.venv\\Scripts\\tempest-server.exe"
 ```
+
+(macOS/Linux: `command = "/path/to/tempest_mcp/.venv/bin/tempest-server"`.)
 
 Check it's active with `/mcp` inside the Codex TUI.
 
@@ -136,12 +145,12 @@ that exposes MCP tools to Ollama's function-calling API. Two practical options:
    {
      "mcpServers": {
        "tempest": {
-         "command": "C:\\path\\to\\tempest_mcp\\.venv\\Scripts\\python.exe",
-         "args": ["-m", "tempest.server"]
+         "command": "C:\\path\\to\\tempest_mcp\\.venv\\Scripts\\tempest-server.exe"
        }
      }
    }
    ```
+   (macOS/Linux: `"command": "/path/to/tempest_mcp/.venv/bin/tempest-server"`.)
    Run: `mcphost -m ollama:qwen3 --config servers.json`, then ask it to
    check the repo for leaks — it'll invoke `tempest_sync`/`tempest_detect`
    through the bridge.
