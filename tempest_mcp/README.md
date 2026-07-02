@@ -31,59 +31,30 @@ Codex, GitHub Copilot, etc.).
 
 ## Install
 
-Requires Python 3.10+. Run these from inside `tempest_mcp/` (the folder this
-README is in) — the venv and the package must live together since Tempest
-reads `config/tempest.default.yaml` via a filesystem-relative path.
-
-**Windows (PowerShell):**
-
-```powershell
-cd tempest_mcp
-python -m venv .venv
-.venv\Scripts\python.exe -m ensurepip --upgrade   # only needed if the next line errors "No module named pip"
-.venv\Scripts\python.exe -m pip install -e .
-```
-
-Always call scripts as `.venv\Scripts\python.exe` (or prefix with `.\`) —
-PowerShell parses a bare `.venv\Scripts\pip` as a module-qualified command
-name and fails with an `Import-Module` error, not a real path.
-
-**macOS / Linux:**
+Requires Python 3.10+ and [`pipx`](https://pipx.pypa.io/) (or
+[`uv`](https://docs.astral.sh/uv/)). One command, from a checkout of this repo:
 
 ```bash
-cd tempest_mcp
-python3 -m venv .venv
-source .venv/bin/activate
-python -m pip install -e .
+git clone <this-repo>
+pipx install ./tempest_mcp        # or: uv tool install ./tempest_mcp
 ```
 
-This pulls in `graphifyy`, `networkx`, `mcp`, and `pyyaml` automatically.
+That puts a `tempest-server` command on your `PATH` in its own isolated
+environment, pulling in `graphifyy`, `networkx`, `mcp`, and `pyyaml`
+automatically. Because it's on `PATH`, every MCP client config below is just
+`command: "tempest-server"` — the **same on every device**, no absolute paths.
 
-> If `python -m venv` produces a venv with no `pip`/`pip.exe` in
-> `Scripts`/`bin` (rare, but happens with some system Python installs), run
-> `python -m ensurepip --upgrade` inside that venv first — no need to
-> recreate it.
+Verify: `tempest-server` should start and wait on stdin (Ctrl-C to quit).
+
+> No pipx/uv? `pipx` ships with recent Python (`python -m pipx ...`), or
+> install with `python -m pip install --user pipx`.
 
 ## Register with an MCP client
 
-`pip install -e .` installs a `tempest-server` console-script entry point
-(defined in `pyproject.toml`'s `[project.scripts]`) straight into the venv's
-`Scripts`/`bin` folder — so every client below points at the same one
-command, no need to spell out `python -m tempest.server`:
-
-- Windows: `C:\path\to\tempest_mcp\.venv\Scripts\tempest-server.exe`
-- macOS/Linux: `/path/to/tempest_mcp/.venv/bin/tempest-server`
-
-Swap in your actual venv path in the examples below.
-
 ### Claude Code
 
-```powershell
-claude mcp add tempest -- C:\path\to\tempest_mcp\.venv\Scripts\tempest-server.exe
-```
-
 ```bash
-claude mcp add tempest -- /path/to/tempest_mcp/.venv/bin/tempest-server
+claude mcp add tempest -- tempest-server
 ```
 
 `-s user` instead of the default `-s local` registers it for every project,
@@ -99,31 +70,27 @@ VS Code: add to `.vscode/mcp.json` (workspace) or your user `mcp.json`:
   "servers": {
     "tempest": {
       "type": "stdio",
-      "command": "C:\\path\\to\\tempest_mcp\\.venv\\Scripts\\tempest-server.exe"
+      "command": "tempest-server"
     }
   }
 }
 ```
-
-(macOS/Linux: `"command": "/path/to/tempest_mcp/.venv/bin/tempest-server"`.)
 
 Copilot CLI: `copilot mcp add` (interactive), or edit its MCP config file
 directly with the same `command` shape as above.
 
 ### Codex CLI
 
-```powershell
-codex mcp add tempest -- C:\path\to\tempest_mcp\.venv\Scripts\tempest-server.exe
+```bash
+codex mcp add tempest -- tempest-server
 ```
 
 Or add directly to `~/.codex/config.toml`:
 
 ```toml
 [mcp_servers.tempest]
-command = "C:\\path\\to\\tempest_mcp\\.venv\\Scripts\\tempest-server.exe"
+command = "tempest-server"
 ```
-
-(macOS/Linux: `command = "/path/to/tempest_mcp/.venv/bin/tempest-server"`.)
 
 Check it's active with `/mcp` inside the Codex TUI.
 
@@ -145,12 +112,11 @@ that exposes MCP tools to Ollama's function-calling API. Two practical options:
    {
      "mcpServers": {
        "tempest": {
-         "command": "C:\\path\\to\\tempest_mcp\\.venv\\Scripts\\tempest-server.exe"
+         "command": "tempest-server"
        }
      }
    }
    ```
-   (macOS/Linux: `"command": "/path/to/tempest_mcp/.venv/bin/tempest-server"`.)
    Run: `mcphost -m ollama:qwen3 --config servers.json`, then ask it to
    check the repo for leaks — it'll invoke `tempest_sync`/`tempest_detect`
    through the bridge.
@@ -184,7 +150,7 @@ The agent will call `tempest_sync` (build/refresh the graph) then
 
 ## Configuration
 
-Tempest ships defaults in `config/tempest.default.yaml` (boundary heuristics,
+Tempest ships defaults in `src/tempest/data/tempest.default.yaml` (boundary heuristics,
 PBN patterns, sink patterns, sensitive-data keywords, known prod
 identifiers). On first `tempest_sync`, a copy is written to
 `<repo>/.tempest/tempest.config.yaml` — edit it to override any default for
@@ -229,9 +195,14 @@ Tempest does this automatically on first sync):
 
 ## Development
 
-```powershell
-.venv\Scripts\python.exe -m pip install -e ".[dev]"
-.venv\Scripts\python.exe -m pytest tests/ -v
+Work from a venv with an editable install (so tests import `tempest` and the
+`tempest-server` script resolves):
+
+```bash
+cd tempest_mcp
+python -m venv .venv && . .venv/bin/activate   # Windows: .venv\Scripts\Activate.ps1
+python -m pip install -e ".[dev]"
+python -m pytest tests/ -v
 ```
 
 Test fixtures live in `tests/fixtures/`:

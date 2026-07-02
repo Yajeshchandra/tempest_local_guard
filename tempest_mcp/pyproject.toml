@@ -26,12 +26,8 @@ tempest-server = "tempest.server:run"
 [tool.setuptools.packages.find]
 where = ["src"]
 
-# config/tempest.default.yaml lives outside src/ (sibling to it) and is
-# located at runtime via a filesystem-relative path in tempest.config
-# (see load_default_config), not via package-data/importlib.resources.
-# This means Tempest currently expects to run from an editable install
-# (`pip install -e .`) or a source checkout, per the plan's install
-# experience -- not a relocated wheel install.
+[tool.setuptools.package-data]
+tempest = ["data/*.yaml"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
