@@ -1,0 +1,165 @@
+# Tempest default heuristic configuration.
+# A target repo may override any of this via .tempest/tempest.config.yaml
+# (deep-merged on top of these defaults; user values win).
+
+# ---------------------------------------------------------------------------
+# Boundary classification: ordered heuristic chain, first match wins.
+# Unmatched nodes/files default to NON-PROD (safe default).
+# ---------------------------------------------------------------------------
+boundary:
+  # (1) Explicit glob overrides — highest priority after manual overrides.
+  # Glob is matched against the node's source_file path (posix-style,
+  # relative to repo root).
+  path_overrides:
+    prod: []
+    non_prod: []
+
+  # (2) Filename / env-file markers.
+  env_file_markers:
+    prod:
+      - ".env.prod"
+      - ".env.production"
+      - "prod.env"
+      - "production.env"
+    dev:
+      - ".env.dev"
+      - ".env.development"
+      - "dev.env"
+    test:
+      - ".env.test"
+      - "test.env"
+    staging:
+      - ".env.staging"
+      - "staging.env"
+    qa:
+      - ".env.qa"
+      - "qa.env"
+
+  # (3) Folder-naming conventions. Matched as a path-segment substring
+  # against the node's source_file (case-insensitive).
+  folder_markers:
+    prod:
+      - "prod"
+      - "production"
+    staging:
+      - "staging"
+      - "stage"
+    qa:
+      - "qa"
+    test:
+      - "test"
+      - "tests"
+      - "spec"
+      - "specs"
+      - "fixtures"
+      - "seed"
+      - "seeds"
+    dev:
+      - "dev"
+      - "development"
+      - "local"
+      - "sandbox"
+
+  # (4) Connection-string / identifier regex heuristics on string literals
+  # near a node's source_location. Any match tags the node PROD.
+  prod_identifier_patterns:
+    - "prod-[a-z0-9\\-\\.]+"
+    - "[a-z0-9\\-]+\\.prod\\.[a-z0-9\\.\\-]+"
+    - "production[a-z0-9\\-_\\.]*"
+    - "[a-z0-9\\-\\_]*-prod-[a-z0-9\\-\\_]*"
+
+  # Minimum Shannon entropy (bits/char) for a string literal to be treated
+  # as a plausible secret/credential when combined with a prod identifier
+  # match nearby. Used by Rule (a).
+  min_secret_entropy: 3.0
+
+# ---------------------------------------------------------------------------
+# Production Boundary Node (PBN): PROD-tagged AND structurally a resource
+# boundary. Matched against node label / norm_label (case-insensitive
+# substring match).
+# ---------------------------------------------------------------------------
+pbn_patterns:
+  database:
+    - "database"
+    - "db"
+    - "postgres"
+    - "mysql"
+    - "mongo"
+    - "redis"
+    - "sql"
+    - "cursor"
+    - "connection"
+    - "session"
+    - "orm"
+    - "repository"
+  storage:
+    - "s3"
+    - "bucket"
+    - "blob"
+    - "storage"
+    - "filesystem"
+    - "datalake"
+  messaging:
+    - "kafka"
+    - "queue"
+    - "topic"
+    - "publisher"
+    - "producer"
+    - "sqs"
+    - "sns"
+    - "eventbus"
+    - "broker"
+  network:
+    - "apiclient"
+    - "httpclient"
+    - "endpoint"
+    - "webhook"
+    - "gateway"
+
+# ---------------------------------------------------------------------------
+# Policy rule (b): edge relations counted as "writes to" / structurally
+# reaches a PBN via calls/uses.
+# ---------------------------------------------------------------------------
+write_edge_relations:
+  - "calls"
+  - "instantiates"
+  - "uses"
+
+# ---------------------------------------------------------------------------
+# Policy rule (c): non-prod sink labels (log/debug/dump destinations).
+# ---------------------------------------------------------------------------
+sink_patterns:
+  - "log"
+  - "logger"
+  - "logging"
+  - "debug"
+  - "dump"
+  - "print"
+  - "console"
+  - "trace"
+
+# Sensitive-data keywords: PROD nodes whose label/norm_label matches one of
+# these (in addition to database/storage PBNs) are treated as prod_data
+# sources for Rule (c).
+sensitive_data_keywords:
+  - "user"
+  - "customer"
+  - "account"
+  - "payment"
+  - "email"
+  - "password"
+  - "ssn"
+  - "credential"
+  - "token"
+  - "pii"
+
+# ---------------------------------------------------------------------------
+# Known hardcoded prod identifiers (Rule a). Literal substrings; matched
+# case-insensitively against string content near a node's source_location.
+# ---------------------------------------------------------------------------
+known_prod_identifiers: []
+
+# Reachability path reconstruction cap (simple-path enumeration is
+# exponential in dense graphs; keep this small).
+max_paths_per_finding: 10
+max_path_length: 25
