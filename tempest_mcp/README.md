@@ -43,26 +43,26 @@ device** — no absolute venv paths to edit.
   don't collide with anything else on your machine.
   - Get pipx: `python -m pip install --user pipx ; python -m pipx ensurepath`
     (then reopen your terminal so `pipx` is on `PATH`).
-  - Or get uv: see [the uv install docs](https://docs.astral.sh/uv/getting-started/installation/).
-- **Git**, to clone this repo.
+  
 
 ### Steps
 
-1. **Copy or Download the repo:**
+1. **Download or copy the repo to your device:**
+
+   Download the repo or copy the `tempest_local_guard`
+   folder over by any means. Then open a terminal in
+   the folder:
 
    ```bash
-   git clone https://github.com/Prabhat-Kr-Sahu/tempest_local_guard.git
    cd tempest_local_guard
    ```
-
-   copy the repo  to  your device
 
 2. **Install the `tempest-server` command** (pick one):
 
    ```bash
    pipx install ./tempest_mcp          # with pipx
    # or
-   uv tool install ./tempest_mcp       # with uv
+   uv tool install ./tempest_mcp       # with if you have uv
    ```
 
    This pulls in `graphifyy`, `networkx`, `mcp`, and `pyyaml` automatically —
@@ -82,10 +82,9 @@ device** — no absolute venv paths to edit.
 
 ### Updating later
 
-Pull the repo and reinstall in place:
+Download or copy the latest repo over your existing folder, then reinstall in place:
 
 ```bash
-git pull
 pipx install --force ./tempest_mcp     # uv: uv tool install --force ./tempest_mcp
 ```
 
