@@ -41,7 +41,7 @@ device** — no absolute venv paths to edit.
 - **[`pipx`](https://pipx.pypa.io/)** or **[`uv`](https://docs.astral.sh/uv/)** —
   either one installs Tempest into an isolated environment so its dependencies
   don't collide with anything else on your machine.
-  - Get pipx: `python -m pip install --user pipx && python -m pipx ensurepath`
+  - Get pipx: `python -m pip install --user pipx ; python -m pipx ensurepath`
     (then reopen your terminal so `pipx` is on `PATH`).
   - Or get uv: see [the uv install docs](https://docs.astral.sh/uv/getting-started/installation/).
 - **Git**, to clone this repo.
