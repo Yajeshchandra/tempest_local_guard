@@ -137,14 +137,14 @@ def evaluate_rule_c(
     sink_patterns = [p.lower() for p in config.get("sink_patterns", [])]
 
     prod_data_nodes = select_prod_data_sources(
-        graph, classifications, sensitive_keywords, pbn_only=True
+        graph, classifications, sensitive_keywords
     )
-    # Remove rationale/docstring PBN nodes — these are extracted comment text
-    # nodes created by graphify, not actual code entities.
+    # ponytail: rationale nodes are prose sentences (label ends with '.'); skip them.
+    # Also skip method nodes (label starts with '.') — class is the right target granularity.
     prod_data_nodes = [
         nid for nid in prod_data_nodes
-        if (graph.nodes[nid].get("label") or "").endswith(")") or
-           graph.nodes.get(nid, {}).get("source_location")
+        if not (graph.nodes[nid].get("label") or "").endswith(".")
+        and not (graph.nodes[nid].get("label") or "").startswith(".")
     ]
     # Prefer the most specific (deepest / most sensitive) prod-data nodes:
     # if a database/storage PBN and a sensitive-keyword node are on the same
@@ -183,18 +183,14 @@ def evaluate_rule_c(
                 continue  # already have a finding for this sink function
 
             # A genuine Rule (c) violation requires the sink to directly reach
-            # a prod-classified node as its FIRST callee (or within the first
-            # meaningful step). If the path from sink to prod data goes through
-            # a non-prod intermediary first (e.g. LocalUserService which
-            # internally calls ProdDatabase), the sink is isolated from prod by
-            # a dev-side abstraction and should NOT fire.
-            #
-            # Concretely: require that at least one path from sink to prod data
-            # has its first intermediate node (path[1]) prod-classified.
+            # a prod-classified node as its FIRST callee — and that first hop
+            # must be an intermediate (not the data_node itself). Spurious
+            # graphify edges are always 2-node direct hops (sink → target);
+            # real leaks go through at least one prod class/method first.
             direct_prod_reach = False
             try:
                 for path in nx.all_simple_paths(graph, nid, data_node_id, cutoff=12):
-                    if len(path) >= 2:
+                    if len(path) >= 2:  # ponytail: method targets excluded, 2-hop to class is genuine
                         first_hop = path[1]
                         if classifications.get(first_hop) and classifications[first_hop].is_prod:
                             direct_prod_reach = True

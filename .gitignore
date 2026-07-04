@@ -17,4 +17,5 @@ venv/
 # Local Claude Code session config (not project source)
 .claude/
 docs/PORTING_PLAN.md
-docs/history.md
+docs/CHECKPOINT_2026-07-04.md
+tempest_mcp/run_tempest.py
