@@ -24,15 +24,14 @@ from tempest.lde.pbn_selector import select_pbns, select_prod_data_sources
 from tempest.lde.reachability import ancestors_of_pbn
 from tempest.rie.boundary import NodeClassification
 from tempest.rie.env_map import ENV_TEST
+from tempest.rim import RepositoryIntelligenceModel
 
 
 # ---------------------------------------------------------------------------
 # Rule (b) — test/seed code writing to a prod resource.
 # ---------------------------------------------------------------------------
 def evaluate_rule_b(
-    graph: nx.DiGraph,
-    classifications: dict[str, NodeClassification],
-    config: dict[str, Any],
+    rim: RepositoryIntelligenceModel,
     max_paths: int = 3,
     max_path_length: int = 12,
 ) -> list[Finding]:
@@ -42,6 +41,7 @@ def evaluate_rule_b(
     approximation over call/use edges — documented as a known MVP
     limitation (a read-only call into a PBN would also match).
     """
+    graph, classifications, config = rim.graph, rim.classifications, rim.config
     write_relations = set(config.get("write_edge_relations", ["calls", "instantiates", "uses"]))
     pbn_types = {"database", "storage", "messaging"}
 
@@ -122,9 +122,7 @@ def evaluate_rule_b(
 # Rule (c) — prod data reaching non-prod logging/debug sinks.
 # ---------------------------------------------------------------------------
 def evaluate_rule_c(
-    graph: nx.DiGraph,
-    classifications: dict[str, NodeClassification],
-    config: dict[str, Any],
+    rim: RepositoryIntelligenceModel,
     max_paths: int = 3,
     max_path_length: int = 12,
 ) -> list[Finding]:
@@ -133,6 +131,7 @@ def evaluate_rule_c(
     sensitive-data keywords) play the PBN role, and we look for non-prod
     sink-labeled (log/debug/dump) ancestors of them.
     """
+    graph, classifications, config = rim.graph, rim.classifications, rim.config
     sensitive_keywords = config.get("sensitive_data_keywords", [])
     sink_patterns = [p.lower() for p in config.get("sink_patterns", [])]
 
@@ -284,15 +283,15 @@ def _iter_non_prod_source_files(
 
 
 def evaluate_rule_a(
-    graph: nx.DiGraph,
-    classifications: dict[str, NodeClassification],
-    config: dict[str, Any],
-    repo_root: str | Path,
+    rim: RepositoryIntelligenceModel,
 ) -> list[Finding]:
     """Mostly a classification-informed grep, not a traversal: scans every
     non-prod source file's string literals for known_prod_identifiers or
     prod_identifier_patterns/entropy matches.
     """
+    graph, classifications, config, repo_root = rim.graph, rim.classifications, rim.config, rim.repo_root
+    
+    findings: list[Finding] = []
     repo_root = Path(repo_root)
     boundary_cfg = config.get("boundary", {})
     patterns = [re.compile(p, re.IGNORECASE) for p in boundary_cfg.get("prod_identifier_patterns", [])]
@@ -389,16 +388,13 @@ def evaluate_rule_a(
 
 
 def evaluate_all_rules(
-    graph: nx.DiGraph,
-    classifications: dict[str, NodeClassification],
-    config: dict[str, Any],
-    repo_root: str | Path,
+    rim: RepositoryIntelligenceModel,
 ) -> list[Finding]:
-    max_paths = config.get("max_paths_per_finding", 3)
-    max_path_length = config.get("max_path_length", 12)
+    max_paths = rim.config.get("max_paths_per_finding", 3)
+    max_path_length = rim.config.get("max_path_length", 12)
 
     findings: list[Finding] = []
-    findings.extend(evaluate_rule_a(graph, classifications, config, repo_root))
-    findings.extend(evaluate_rule_b(graph, classifications, config, max_paths, max_path_length))
-    findings.extend(evaluate_rule_c(graph, classifications, config, max_paths, max_path_length))
+    findings.extend(evaluate_rule_a(rim))
+    findings.extend(evaluate_rule_b(rim, max_paths, max_path_length))
+    findings.extend(evaluate_rule_c(rim, max_paths, max_path_length))
     return findings
