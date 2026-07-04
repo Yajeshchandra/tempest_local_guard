@@ -32,9 +32,14 @@ class Finding:
 
 def summarize_node(graph, node_id: str) -> dict[str, Any]:
     data = graph.nodes.get(node_id, {})
-    return {
+    summary: dict[str, Any] = {
         "id": node_id,
         "label": data.get("label"),
         "source_file": data.get("source_file"),
         "source_location": data.get("source_location"),
     }
+    # Include scanner findings if present — avoids file re-reads in reports.
+    findings = data.get("scanner_findings")
+    if findings:
+        summary["scanner_findings"] = findings
+    return summary

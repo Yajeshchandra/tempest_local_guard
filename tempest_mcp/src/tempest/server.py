@@ -91,6 +91,7 @@ def tempest_detect(repo_path: str) -> dict[str, Any]:
 
     payload = report.to_dict()
     payload["ok"] = True
+    payload["markdown_report"] = report.to_markdown()
 
     try:
         save_report(repo_path, report)

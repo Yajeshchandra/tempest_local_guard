@@ -29,15 +29,23 @@ def select_prod_data_sources(
     graph: nx.DiGraph,
     classifications: dict[str, NodeClassification],
     sensitive_keywords: list[str],
+    pbn_only: bool = False,
 ) -> list[str]:
     """Prod data sources for Rule (c): PBNs of type database/storage, or any
-    PROD node whose label/norm_label matches a sensitive-data keyword."""
+    PROD node whose label/norm_label matches a sensitive-data keyword (unless
+    pbn_only=True, in which case only PBN-typed nodes are returned).
+
+    pbn_only=True is the safer default for Rule (c) to avoid false positives
+    from keyword-matched non-PBN prod nodes when graphify creates spurious
+    cross-file method edges for same-named methods."""
     result = []
     for node_id, c in classifications.items():
         if not c.is_prod:
             continue
         if c.is_pbn and c.pbn_type in ("database", "storage"):
             result.append(node_id)
+            continue
+        if pbn_only:
             continue
         label = (graph.nodes[node_id].get("norm_label") or graph.nodes[node_id].get("label") or "").lower()
         if any(kw.lower() in label for kw in sensitive_keywords):

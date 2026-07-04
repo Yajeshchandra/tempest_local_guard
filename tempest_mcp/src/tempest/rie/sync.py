@@ -143,6 +143,10 @@ def run_graphify_extract(repo_root: str | Path, timeout_seconds: int = 600) -> P
             f"stdout:\n{proc.stdout}\nstderr:\n{proc.stderr}"
         )
 
+    import shutil, pathlib
+    if pathlib.Path(paths.repo_root, 'graphify-out').exists():
+        if paths.graphify_out_dir.exists(): shutil.rmtree(paths.graphify_out_dir)
+        shutil.move(pathlib.Path(paths.repo_root, 'graphify-out'), paths.graphify_out_dir)
     if not paths.graph_json.exists():
         raise GraphifyExtractError(
             f"`graphify update` completed but no graph.json was found at "

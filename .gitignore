@@ -16,3 +16,5 @@ venv/
 
 # Local Claude Code session config (not project source)
 .claude/
+docs/PORTING_PLAN.md
+docs/history.md

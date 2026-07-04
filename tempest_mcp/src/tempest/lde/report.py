@@ -42,3 +42,59 @@ class Report:
             },
             "findings": [f.to_dict() for f in self.findings],
         }
+
+    def to_markdown(self) -> str:
+        lines = [
+            f"# Tempest Security Report: {self.repo_root}",
+            "",
+            "## Summary",
+            "",
+            f"- **Scan ID:** {self.scan_id}",
+            f"- **Date:** {self.scanned_at}",
+            f"- **Total findings:** {len(self.findings)}",
+            f"- **Duration:** {self.duration_seconds:.2f}s",
+            f"- **Graph size:** {self.node_count} nodes, {self.edge_count} edges",
+            f"- **Production nodes:** {self.prod_node_count}",
+            f"- **Production boundaries (PBNs):** {self.pbn_count}",
+            "",
+            "## Findings",
+            "",
+        ]
+
+        if not self.findings:
+            lines.append("No findings.")
+            return "\n".join(lines) + "\n"
+
+        # Sort findings: high severity first, then by rule
+        sorted_findings = sorted(
+            self.findings, 
+            key=lambda f: (0 if f.severity == "critical" else 1 if f.severity == "high" else 2, f.rule, f.rule_name)
+        )
+
+        for index, finding in enumerate(sorted_findings, start=1):
+            source_file = finding.source_node.get("source_file") or "unknown"
+            source_loc = finding.source_node.get("source_location") or ""
+            location = f"{source_file}:{source_loc}" if source_loc else source_file
+            
+            lines.extend([
+                f"### {index}. {finding.rule_name} (Rule {finding.rule.upper()})",
+                "",
+                f"- **Severity:** {finding.severity.upper()}",
+                f"- **Location:** `{location}`",
+                f"- **Source Node:** {finding.source_node.get('label') or 'unknown'}",
+            ])
+            
+            if finding.target_node:
+                lines.append(f"- **Target Node:** {finding.target_node.get('label') or 'unknown'} ({finding.target_node.get('source_file') or ''})")
+                
+            if finding.paths:
+                lines.append(f"- **Paths found:** {len(finding.paths)}")
+                
+            lines.extend([
+                "",
+                "**Suggested Fix:**",
+                finding.suggested_fix,
+                "",
+            ])
+
+        return "\n".join(lines) + "\n"
