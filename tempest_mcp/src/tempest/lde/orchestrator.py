@@ -36,9 +36,19 @@ def run_detection(repo_root: str | Path) -> Report:
     except GraphLoadError as exc:
         raise DetectionError(str(exc)) from exc
 
+    from tempest.rim import RepositoryIntelligenceModel
+
     config = load_config(repo_root)
     classifications = classify_graph(graph, config, repo_root)
-    findings: list = evaluate_all_rules(graph, classifications, config, repo_root)
+    
+    rim = RepositoryIntelligenceModel(
+        graph=graph,
+        classifications=classifications,
+        config=config,
+        repo_root=str(repo_root)
+    )
+    
+    findings: list = evaluate_all_rules(rim)
 
     duration = time.monotonic() - start
 

@@ -14,7 +14,8 @@ def _prepare(repo_root, result):
     graph = load_graph(result.graph_json_path)
     config = load_config(repo_root)
     classifications = classify_graph(graph, config, repo_root)
-    return graph, config, classifications
+    from tempest.rim import RepositoryIntelligenceModel
+    return RepositoryIntelligenceModel(graph, classifications, config, str(repo_root))
 
 
 # ---------------------------------------------------------------------------
@@ -22,8 +23,8 @@ def _prepare(repo_root, result):
 # ---------------------------------------------------------------------------
 def test_rule_b_fires_on_planted_leak(leaky_repo_synced):
     repo_root, result = leaky_repo_synced
-    graph, config, classifications = _prepare(repo_root, result)
-    findings = evaluate_rule_b(graph, classifications, config)
+    rim = _prepare(repo_root, result)
+    findings = evaluate_rule_b(rim)
 
     assert len(findings) == 1
     f = findings[0]
@@ -36,8 +37,8 @@ def test_rule_b_fires_on_planted_leak(leaky_repo_synced):
 
 def test_rule_b_does_not_fire_on_clean_sibling(leaky_repo_synced):
     repo_root, result = leaky_repo_synced
-    graph, config, classifications = _prepare(repo_root, result)
-    findings = evaluate_rule_b(graph, classifications, config)
+    rim = _prepare(repo_root, result)
+    findings = evaluate_rule_b(rim)
 
     flagged_files = {f.source_node["source_file"] for f in findings}
     assert not any("clean_seed_script.py" in f for f in flagged_files)
@@ -48,8 +49,8 @@ def test_rule_b_does_not_fire_on_clean_sibling(leaky_repo_synced):
 # ---------------------------------------------------------------------------
 def test_rule_c_fires_on_planted_leak(leaky_repo_synced):
     repo_root, result = leaky_repo_synced
-    graph, config, classifications = _prepare(repo_root, result)
-    findings = evaluate_rule_c(graph, classifications, config)
+    rim = _prepare(repo_root, result)
+    findings = evaluate_rule_c(rim)
 
     assert len(findings) == 1
     f = findings[0]
@@ -60,8 +61,8 @@ def test_rule_c_fires_on_planted_leak(leaky_repo_synced):
 
 def test_rule_c_does_not_fire_on_clean_sibling(leaky_repo_synced):
     repo_root, result = leaky_repo_synced
-    graph, config, classifications = _prepare(repo_root, result)
-    findings = evaluate_rule_c(graph, classifications, config)
+    rim = _prepare(repo_root, result)
+    findings = evaluate_rule_c(rim)
 
     flagged_files = {f.source_node["source_file"] for f in findings}
     assert not any("clean_debug_utils.py" in f for f in flagged_files)
@@ -72,8 +73,8 @@ def test_rule_c_does_not_fire_on_clean_sibling(leaky_repo_synced):
 # ---------------------------------------------------------------------------
 def test_rule_a_fires_on_planted_leak(leaky_repo_synced):
     repo_root, result = leaky_repo_synced
-    graph, config, classifications = _prepare(repo_root, result)
-    findings = evaluate_rule_a(graph, classifications, config, repo_root)
+    rim = _prepare(repo_root, result)
+    findings = evaluate_rule_a(rim)
 
     assert len(findings) >= 1
     flagged_files = {f.source_node["source_file"] for f in findings}
@@ -85,8 +86,8 @@ def test_rule_a_fires_on_planted_leak(leaky_repo_synced):
 
 def test_rule_a_does_not_fire_on_clean_sibling(leaky_repo_synced):
     repo_root, result = leaky_repo_synced
-    graph, config, classifications = _prepare(repo_root, result)
-    findings = evaluate_rule_a(graph, classifications, config, repo_root)
+    rim = _prepare(repo_root, result)
+    findings = evaluate_rule_a(rim)
 
     flagged_files = {f.source_node["source_file"] for f in findings}
     assert not any("clean_test_config.py" in f for f in flagged_files)

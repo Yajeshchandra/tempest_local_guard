@@ -110,3 +110,25 @@ All 7 phases complete. All 27 tests pass.
 - `rie/sync.py`: Removed `--force`, added `branch_state.commit_sha` check against `last_sync.json`.
 
 **Tests:** Verified against `kustomize` (8352 nodes, 22085 edges) — sync skips parsing and detection runs against cached graph in ~20s. All 27 core unit tests continue to pass.
+
+---
+
+## Iteration 9 — Formal RIM Interface
+
+**Date:** 2026-07-04
+
+**Goal:** Fulfill the LLD requirement for a formal Repository Intelligence Model (RIM) boundary separating the RIE from the LDE, avoiding the inline passing of `(graph, classifications, config)` tuples.
+
+**Changes (Ponytail style):**
+- **New Interface:** Created `rim.py` holding a minimal `RepositoryIntelligenceModel` dataclass.
+- **Orchestrator Update:** `run_detection` now builds the RIM after RIE steps and passes the single object to the LDE engine.
+- **Policy Update:** All three rules in `policy.py` now accept `rim` and unpack it internally, minimizing churn while creating a strict boundary.
+- **Test Update:** Updated all pytest fixtures in `test_policy_rules.py` to construct and use the RIM.
+
+**Files Modified:**
+- `rim.py`: Created.
+- `lde/orchestrator.py`: `run_detection` builds and passes RIM.
+- `lde/policy.py`: Signatures changed to accept RIM.
+- `tests/test_policy_rules.py`: Fixtures updated.
+
+**Tests:** All 27 core unit tests pass in ~3.8s.
