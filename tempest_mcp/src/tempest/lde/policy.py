@@ -15,7 +15,10 @@ from typing import Any
 import networkx as nx
 
 from tempest.lde.evidence import Finding, summarize_node
-from tempest.lde.path_filter import nodes_with_relation_path_to_target
+from tempest.lde.path_filter import (
+    has_direct_or_transitive_edge_of_relations,
+    nodes_with_relation_path_to_target,
+)
 from tempest.lde.path_reconstruct import build_path_evidence
 from tempest.lde.pbn_selector import select_pbns, select_prod_data_sources
 from tempest.lde.reachability import ancestors_of_pbn
@@ -50,17 +53,46 @@ def evaluate_rule_b(
         test_ancestors = {
             nid for nid in reach.ancestors if classifications[nid].env_tag == ENV_TEST
         }
-        if not test_ancestors:
+
+        # Graphify sometimes emits edges in the wrong direction (PBN→test instead
+        # of test→PBN). Also check TEST descendants of the PBN so we catch both.
+        test_descendants = {
+            nid
+            for nid in nx.descendants(graph, pbn_id)
+            if nid in classifications and classifications[nid].env_tag == ENV_TEST
+        }
+
+        test_candidates = test_ancestors | test_descendants
+        if not test_candidates:
             continue
 
         # Narrow to ancestors connected via a write-relevant relation chain,
         # not merely structural containment/imports.
-        matched = nodes_with_relation_path_to_target(
+        matched_anc = nodes_with_relation_path_to_target(
             graph, test_ancestors, pbn_id, write_relations, max_depth=max_path_length
-        )
+        ) if test_ancestors else set()
+
+        # For descendants: check relation-filtered path FROM pbn to the test node
+        # (inverted edge scenario — the PBN has a calls edge into test code).
+        matched_desc = {
+            nid for nid in test_descendants
+            if has_direct_or_transitive_edge_of_relations(graph, pbn_id, nid, write_relations, max_path_length)
+        }
+
+        matched = matched_anc | matched_desc
 
         for source_id in matched:
+            # Only report function/method-level nodes as sources — not module
+            # containers, imports, or rationale (docstring) nodes.
+            src_data = graph.nodes.get(source_id, {})
+            src_label = src_data.get("label") or ""
+            if not (src_data.get("source_location") and src_label.endswith("()")):
+                continue
             paths = build_path_evidence(graph, source_id, pbn_id, max_paths, max_path_length)
+            # For inverted edges, paths may be empty (source→PBN doesn't exist).
+            # Build a reverse path instead.
+            if not paths:
+                paths = build_path_evidence(graph, pbn_id, source_id, max_paths, max_path_length)
             pbn_type = classifications[pbn_id].pbn_type
             findings.append(
                 Finding(
@@ -104,7 +136,16 @@ def evaluate_rule_c(
     sensitive_keywords = config.get("sensitive_data_keywords", [])
     sink_patterns = [p.lower() for p in config.get("sink_patterns", [])]
 
-    prod_data_nodes = select_prod_data_sources(graph, classifications, sensitive_keywords)
+    prod_data_nodes = select_prod_data_sources(
+        graph, classifications, sensitive_keywords, pbn_only=True
+    )
+    # Remove rationale/docstring PBN nodes — these are extracted comment text
+    # nodes created by graphify, not actual code entities.
+    prod_data_nodes = [
+        nid for nid in prod_data_nodes
+        if (graph.nodes[nid].get("label") or "").endswith(")") or
+           graph.nodes.get(nid, {}).get("source_location")
+    ]
     # Prefer the most specific (deepest / most sensitive) prod-data nodes:
     # if a database/storage PBN and a sensitive-keyword node are on the same
     # ancestry chain (e.g. ProdDatabase <- ProdUserService.get_user_record),
@@ -140,6 +181,30 @@ def evaluate_rule_c(
 
             if nid in best_finding_for_sink:
                 continue  # already have a finding for this sink function
+
+            # A genuine Rule (c) violation requires the sink to directly reach
+            # a prod-classified node as its FIRST callee (or within the first
+            # meaningful step). If the path from sink to prod data goes through
+            # a non-prod intermediary first (e.g. LocalUserService which
+            # internally calls ProdDatabase), the sink is isolated from prod by
+            # a dev-side abstraction and should NOT fire.
+            #
+            # Concretely: require that at least one path from sink to prod data
+            # has its first intermediate node (path[1]) prod-classified.
+            direct_prod_reach = False
+            try:
+                for path in nx.all_simple_paths(graph, nid, data_node_id, cutoff=12):
+                    if len(path) >= 2:
+                        first_hop = path[1]
+                        if classifications.get(first_hop) and classifications[first_hop].is_prod:
+                            direct_prod_reach = True
+                            break
+            except (nx.NodeNotFound, nx.NetworkXNoPath):
+                pass
+
+            if not direct_prod_reach:
+                continue
+
             paths = build_path_evidence(graph, nid, data_node_id, max_paths, max_path_length)
             best_finding_for_sink[nid] = (data_node_id, paths)
 
@@ -235,6 +300,7 @@ def evaluate_rule_a(
     repo_root = Path(repo_root)
     boundary_cfg = config.get("boundary", {})
     patterns = [re.compile(p, re.IGNORECASE) for p in boundary_cfg.get("prod_identifier_patterns", [])]
+    secret_patterns = [re.compile(p, re.IGNORECASE) for p in config.get("secret_patterns", {}).values()]
     known_identifiers = [k.lower() for k in config.get("known_prod_identifiers", [])]
     min_entropy = boundary_cfg.get("min_secret_entropy", 3.0)
 
@@ -275,20 +341,20 @@ def evaluate_rule_a(
 
             matched_pattern = any(p.search(literal) for p in patterns)
             matched_known = any(k in literal.lower() for k in known_identifiers)
+            matched_secret = any(p.search(literal) for p in secret_patterns)
             is_secret_like = _shannon_entropy(literal) >= min_entropy and any(
                 c.isdigit() for c in literal
             ) and any(c.isalpha() for c in literal)
 
-            if not (matched_pattern or matched_known):
+            if not (matched_pattern or matched_known or matched_secret):
                 continue
             # Require the literal to also look secret/identifier-like (not
             # just any string that happens to contain "prod") OR to be a
-            # connection-string-shaped match, to keep this from firing on
-            # every mention of the word "production" in a comment.
+            # connection-string-shaped match, OR to be a direct secret hit.
             looks_like_connection_or_key = bool(
                 re.search(r"://|@|sk_live|api[_-]?key|secret|password|token", literal, re.IGNORECASE)
             )
-            if not (matched_known or looks_like_connection_or_key or is_secret_like):
+            if not (matched_known or matched_secret or looks_like_connection_or_key or is_secret_like):
                 continue
 
             seen.add(key)
@@ -311,6 +377,7 @@ def evaluate_rule_a(
                         "matched_literal": literal,
                         "matched_known_identifier": matched_known,
                         "matched_pattern": matched_pattern,
+                        "matched_secret_pattern": matched_secret,
                         "entropy": round(_shannon_entropy(literal), 2),
                     },
                     suggested_fix=(

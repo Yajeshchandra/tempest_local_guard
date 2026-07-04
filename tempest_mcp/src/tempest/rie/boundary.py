@@ -116,6 +116,17 @@ def _compile_prod_identifier_patterns(config: dict[str, Any]) -> list[re.Pattern
             continue
     return compiled
 
+
+def _compile_scanner_patterns(config: dict[str, Any]) -> dict[str, re.Pattern]:
+    patterns = config.get("scanner_patterns", {})
+    compiled = {}
+    for name, p in patterns.items():
+        try:
+            compiled[name] = re.compile(p, re.IGNORECASE)
+        except re.error:
+            continue
+    return compiled
+
 _SOURCE_TEXT_CACHE: dict[str, str] = {}
 
 
@@ -165,12 +176,46 @@ def _content_matches_prod_identifier(
     return any(p.search(lit) for lit in literals for p in patterns)
 
 
+def _annotate_scanner_findings(
+    node_data: dict, source_file: str | None, repo_root: Path, patterns: dict[str, re.Pattern]
+) -> None:
+    if not patterns or not source_file:
+        return
+    text = _read_source_near(source_file, repo_root)
+    if not text:
+        return
+    literals = _extract_string_literals(text)
+    findings = node_data.setdefault("scanner_findings", {})
+    for name, p in patterns.items():
+        for lit in literals:
+            if p.search(lit):
+                findings[name] = True
+                break
+
+
 def _matches_any(label: str, keywords: list[str]) -> bool:
     label_lower = (label or "").lower()
     return any(kw.lower() in label_lower for kw in keywords)
 
 
 def _classify_pbn(node_data: dict, config: dict[str, Any]) -> tuple[bool, str | None]:
+    # 1. Check precise scanner findings first
+    findings = node_data.get("scanner_findings", {})
+    if findings:
+        mapping = {
+            "database_url": "database",
+            "aws_s3_uri": "storage",
+            "azure_storage_url": "storage",
+            "gcp_gcs_uri": "storage",
+        }
+        for finding_name in findings:
+            if finding_name in mapping:
+                return True, mapping[finding_name]
+        # General cloud identifiers imply a network boundary if not specifically storage/db
+        if any(k in findings for k in ("aws_arn", "azure_resource_id", "gcp_service_account", "azure_key_vault")):
+            return True, "network"
+
+    # 2. Fallback to label-based heuristics
     label = node_data.get("norm_label") or node_data.get("label") or ""
     pbn_patterns = config.get("pbn_patterns", {})
     for pbn_type, keywords in pbn_patterns.items():
@@ -186,6 +231,7 @@ def classify_node(
     repo_root: Path,
     overrides: dict[str, dict],
     prod_identifier_patterns: list[re.Pattern] | None = None,
+    scanner_patterns: dict[str, re.Pattern] | None = None,
 ) -> NodeClassification:
     reasons: list[str] = []
 
@@ -197,6 +243,11 @@ def classify_node(
 
     if prod_identifier_patterns is None:
         prod_identifier_patterns = _compile_prod_identifier_patterns(config)
+    if scanner_patterns is None:
+        scanner_patterns = _compile_scanner_patterns(config)
+
+    # Annotate graph node with discovery scanner findings
+    _annotate_scanner_findings(node_data, source_file, repo_root, scanner_patterns)
 
     # Content-based regex is the lowest-priority signal in the heuristic
     # chain: it only fires when the path itself gave no signal at all
@@ -251,6 +302,7 @@ def classify_graph(
     repo_root = Path(repo_root)
     overrides = load_overrides(repo_root)
     prod_identifier_patterns = _compile_prod_identifier_patterns(config)
+    scanner_patterns = _compile_scanner_patterns(config)
 
     classifications: dict[str, NodeClassification] = {}
     for node_id, node_data in graph.nodes(data=True):
@@ -261,6 +313,7 @@ def classify_graph(
             repo_root,
             overrides,
             prod_identifier_patterns=prod_identifier_patterns,
+            scanner_patterns=scanner_patterns,
         )
     return classifications
 
