@@ -107,7 +107,6 @@ def run_graphify_extract(repo_root: str | Path, timeout_seconds: int = 600) -> P
         "update",
         str(paths.repo_root),
         "--no-cluster",
-        "--force",
     ]
     # `update` has no --out flag; it writes to <repo_root>/<GRAPHIFY_OUT>.
     env = {**os.environ, "GRAPHIFY_OUT": f"{TEMPEST_DIR_NAME}/{GRAPHIFY_OUT_DIR_NAME}"}
@@ -161,14 +160,29 @@ def sync_repo(repo_root: str | Path, timeout_seconds: int = 600) -> SyncResult:
     start = time.monotonic()
     paths = RepoPaths(repo_root)
 
+    branch_state = get_branch_state(paths.repo_root)
+
+    # ponytail: ultra-fast incremental sync. If commit hash matches last sync,
+    # and the graph JSON is intact, skip graphify extract entirely.
+    # On first run (no last_sync.json), it gracefully falls through.
+    if branch_state.commit_sha and paths.last_sync_file.exists() and paths.graph_json.exists():
+        try:
+            with open(paths.last_sync_file, "r", encoding="utf-8") as f:
+                last_sync_data = json.load(f)
+            if last_sync_data.get("commit_sha") == branch_state.commit_sha:
+                logger.info("Commit hash unchanged (%s), skipping graph extraction.", branch_state.commit_sha)
+                # Ensure the loaded data matches SyncResult signature
+                last_sync_data.pop("ok", None)
+                return SyncResult(**last_sync_data)
+        except Exception:
+            pass
+
     graph_json_path = run_graphify_extract(repo_root, timeout_seconds=timeout_seconds)
 
     with open(graph_json_path, "r", encoding="utf-8") as f:
         data = json.load(f)
     node_count = len(data.get("nodes", []))
     edge_count = len(data.get("links", data.get("edges", [])))
-
-    branch_state = get_branch_state(paths.repo_root)
 
     duration = time.monotonic() - start
 
