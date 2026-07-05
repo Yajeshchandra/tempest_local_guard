@@ -132,3 +132,25 @@ All 7 phases complete. All 27 tests pass.
 - `tests/test_policy_rules.py`: Fixtures updated.
 
 **Tests:** All 27 core unit tests pass in ~3.8s.
+
+---
+
+## Iteration 11 — Semantic Enrichment (Lazy Filter)
+
+**Date:** 2026-07-05
+
+**Goal:** Reduce false positives in Rule B (test-to-prod database reachability) by using an LLM to semantically verify if the edge is a destructive WRITE operation, rather than a harmless READ.
+
+**Changes (Ponytail style):**
+- **Lazy Evaluation:** Instead of enriching the massive 8,000+ node graph with LLM calls (which would take minutes and cost money), the LLM is only invoked on the 2 or 3 candidate paths that Rule B finds structurally.
+- **LLM Router:** Added `litellm` dependency to allow users to configure OpenAI, Anthropic, or local Ollama endpoints effortlessly.
+- **Filter Implementation:** Added `semantic_filter.py` that extracts the source file text for the candidate node and prompts the LLM to classify the operation as `WRITE` or `READ`. It drops the finding if it's a read.
+- **Integration:** Wired into `orchestrator.py` right before the report is finalized.
+
+**Files Modified:**
+- `pyproject.toml`: Added `litellm` dependency.
+- `src/tempest/lde/semantic_filter.py`: Created the filtering logic.
+- `src/tempest/lde/orchestrator.py`: Invoked the filter.
+- `docs/lld/semantic_enrichment_plan.md`: Created design doc.
+
+**Tests:** Verified that structural tests still pass (27/27) when LLM config is missing (graceful degradation).

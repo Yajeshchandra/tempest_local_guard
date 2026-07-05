@@ -50,6 +50,9 @@ def run_detection(repo_root: str | Path) -> Report:
     
     findings: list = evaluate_all_rules(rim)
 
+    from tempest.lde.semantic_filter import apply_semantic_filter
+    findings = apply_semantic_filter(findings, rim)
+
     duration = time.monotonic() - start
 
     pbn_count = sum(1 for c in classifications.values() if c.is_pbn)
