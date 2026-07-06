@@ -39,16 +39,13 @@ If we choose **Option B** (Internal LLM), we must decide *when* to run the LLM:
 
 ---
 
-## Finalized Plan: Internal Engine Approach (Lazy Filter)
+## Finalized Plan: Agentic Approach (Zero Config)
 
-Based on the decision to proceed with Option B:
-1. Add an optional `llm_config` block to `tempest.config.yaml` (supporting OpenAI, Anthropic, or local Ollama).
-2. If configured, `tempest_detect` will run the structural scan first (taking ~10ms).
-3. For the handful of Rule B candidates, Tempest extracts the source file text and prompts the LLM to classify the operation.
-4. Tempest filters out the false positives before returning the final report.
+Based on the decision to proceed with Option A:
+1. Tempest does not make LLM calls itself. No `litellm` or API keys needed.
+2. In the final `Report.to_markdown()` output (or directly in the MCP tool response), Tempest will append a system instruction for the Host Agent (Claude).
+3. The instruction will ask the Host Agent to evaluate any Rule B findings by looking at the source code context, and only report it to the user if it's a destructive WRITE operation.
+4. This keeps the Python engine lightning fast and zero-dependency, leveraging the existing intelligence of the agent driving the MCP server.
 
 ## Required Changes
-1. **Config:** Update `config.py` to parse LLM credentials.
-2. **Dependencies:** Add `litellm` (or equivalent lightweight LLM router) to `pyproject.toml`.
-3. **Engine:** Add `lde/semantic_filter.py` with the LLM prompting logic.
-4. **Integration:** Update `orchestrator.py` or `policy.py` to pass candidates through the semantic filter if credentials exist.
+1. **Engine:** Update `lde/report.py` to append the LLM system prompt for Rule B findings.
