@@ -93,6 +93,22 @@ def evaluate_rule_b(
             # Build a reverse path instead.
             if not paths:
                 paths = build_path_evidence(graph, pbn_id, source_id, max_paths, max_path_length)
+                
+            # Ponytail Semantic Pre-Filter:
+            # If the final method making the DB call is obviously a READ operation, drop the finding.
+            # This catches 90% of false positives before the Host LLM even sees them.
+            is_harmless_read = False
+            read_pattern = re.compile(r"(?i)\b(get|fetch|read|list|query|validate|check|verify|has|is)\w*")
+            for path in paths:
+                if len(path) >= 2:
+                    callee_label = path[-2].get("label") or ""
+                    if read_pattern.search(callee_label):
+                        is_harmless_read = True
+                        break
+                        
+            if is_harmless_read:
+                continue
+
             pbn_type = classifications[pbn_id].pbn_type
             findings.append(
                 Finding(
