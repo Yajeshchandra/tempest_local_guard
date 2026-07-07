@@ -117,6 +117,48 @@ pbn_patterns:
     - "gateway"
 
 # ---------------------------------------------------------------------------
+# Resource-client patterns: PRECISE library/client identifiers that
+# unambiguously mean "this code talks to an external stateful resource"
+# (a DB driver, a cloud SDK client, a queue producer). Unlike pbn_patterns
+# (broad label substrings, PROD-gated), these fire REGARDLESS of env tag —
+# because on real repos the resource itself usually sits in no prod/ folder;
+# it's just "the database", reached by both prod and (leaking) non-prod code.
+# A node matching one of these is a Production Boundary Node UNLESS it is an
+# explicit local/test double (env DEV or TEST — e.g. a LocalDatabase stub).
+# Matched as a case-insensitive substring against the node label/norm_label.
+# ponytail: boto3.client type is arg-dependent (s3 vs sqs); we can't see the
+# arg from the label, so it's mapped to storage (the canonical leak target) —
+# scanner_findings (s3:// URIs) give precise typing when present.
+resource_client_patterns:
+  database:
+    - "create_engine"
+    - "sessionmaker"
+    - "psycopg2"
+    - "psycopg"
+    - "pymysql"
+    - "asyncpg"
+    - "mongoclient"
+    - "pymongo"
+    - "sqlalchemy"
+    - "databaseclient"
+    - "db_connect"
+  storage:
+    - "boto3.client"
+    - "boto3.resource"
+    - "botocore"
+    - "google.cloud.storage"
+    - "storage.client"
+    - "blobserviceclient"
+    - "s3client"
+    - "minio"
+  messaging:
+    - "kafkaproducer"
+    - "kafkaconsumer"
+    - "pika.blockingconnection"
+    - "celery"
+    - "sqsclient"
+
+# ---------------------------------------------------------------------------
 # Policy rule (b): edge relations counted as "writes to" / structurally
 # reaches a PBN via calls/uses.
 # ---------------------------------------------------------------------------

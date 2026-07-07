@@ -24,7 +24,7 @@ from typing import Any
 import networkx as nx
 
 from tempest.paths import RepoPaths
-from tempest.rie.env_map import ENV_PROD, ENV_UNKNOWN, classify_env_for_path
+from tempest.rie.env_map import ENV_DEV, ENV_PROD, ENV_TEST, ENV_UNKNOWN, classify_env_for_path
 
 PBN_TYPE_NONE = None
 
@@ -198,8 +198,20 @@ def _matches_any(label: str, keywords: list[str]) -> bool:
     return any(kw.lower() in label_lower for kw in keywords)
 
 
-def _classify_pbn(node_data: dict, config: dict[str, Any]) -> tuple[bool, str | None]:
-    # 1. Check precise scanner findings first
+def _classify_boundary(
+    node_data: dict, config: dict[str, Any], is_prod: bool
+) -> tuple[bool, str | None]:
+    """Is this node a resource boundary (database/storage/messaging/network),
+    and of what type?
+
+    Two confidence tiers:
+      • High-confidence signals — connection-string scanner findings and precise
+        resource-client patterns — fire REGARDLESS of env tag, because on real
+        repos the resource sits in no prod/ folder; it's just "the database".
+      • Broad label-substring `pbn_patterns` stay PROD-gated (noisy on their own).
+    """
+    # 1. Connection-string / cloud-resource scanner findings — high confidence,
+    #    env-agnostic.
     findings = node_data.get("scanner_findings", {})
     if findings:
         mapping = {
@@ -215,12 +227,21 @@ def _classify_pbn(node_data: dict, config: dict[str, Any]) -> tuple[bool, str | 
         if any(k in findings for k in ("aws_arn", "azure_resource_id", "gcp_service_account", "azure_key_vault")):
             return True, "network"
 
-    # 2. Fallback to label-based heuristics
-    label = node_data.get("norm_label") or node_data.get("label") or ""
-    pbn_patterns = config.get("pbn_patterns", {})
-    for pbn_type, keywords in pbn_patterns.items():
-        if _matches_any(label, keywords):
-            return True, pbn_type
+    label = (node_data.get("norm_label") or node_data.get("label") or "").lower()
+
+    # 2. Precise resource-client patterns — env-agnostic (e.g. create_engine,
+    #    boto3.client, MongoClient). Unambiguously an external resource.
+    for boundary_type, patterns in config.get("resource_client_patterns", {}).items():
+        for pat in patterns:
+            if pat.lower() in label:
+                return True, boundary_type
+
+    # 3. Broad label-substring heuristics — PROD-gated (would over-match on a
+    #    real repo where many nodes are named *db*/*session*/*connection*).
+    if is_prod:
+        for pbn_type, keywords in config.get("pbn_patterns", {}).items():
+            if _matches_any(label, keywords):
+                return True, pbn_type
     return False, None
 
 
@@ -264,11 +285,16 @@ def classify_node(
 
     is_prod = env_tag == ENV_PROD
 
-    is_pbn, pbn_type = (False, None)
-    if is_prod:
-        is_pbn, pbn_type = _classify_pbn(node_data, config)
-        if is_pbn:
-            reasons.append(f"structural PBN match -> {pbn_type}")
+    # A node is a Production Boundary Node if it is structurally a resource
+    # boundary AND not an explicit local/test double. High-confidence resource
+    # clients (connection strings, precise SDK/driver patterns) are detected
+    # regardless of env tag; a DEV LocalDatabase or a TEST fake is a resource
+    # boundary but not a *production* one, so it's excluded here.
+    is_boundary, boundary_type = _classify_boundary(node_data, config, is_prod)
+    is_pbn = is_boundary and env_tag not in (ENV_DEV, ENV_TEST)
+    pbn_type = boundary_type if is_pbn else None
+    if is_pbn:
+        reasons.append(f"structural PBN match -> {pbn_type}")
 
     overridden = False
     override = overrides.get(node_id)
