@@ -11,7 +11,12 @@ boundary:
   # Glob is matched against the node's source_file path (posix-style,
   # relative to repo root).
   path_overrides:
-    prod: []
+    # Real repos mark prod via config files, not folders.
+    prod:
+      - "*/production.py"
+      - "*/production.*"
+      - "*settings/prod*"
+      - "*config/prod*"
     non_prod: []
 
   # (2) Filename / env-file markers.
@@ -49,9 +54,14 @@ boundary:
     test:
       - "test"
       - "tests"
+      - "__tests__"
       - "spec"
       - "specs"
+      - "e2e"
       - "fixtures"
+      - "factories"
+      - "testdata"
+      - "mocks"
       - "seed"
       - "seeds"
     dev:
@@ -59,6 +69,11 @@ boundary:
       - "development"
       - "local"
       - "sandbox"
+      - "scripts"
+      - "tooling"
+      - "examples"
+      - "samples"
+      - "notebooks"
 
   # (4) Connection-string / identifier regex heuristics on string literals
   # near a node's source_location. Any match tags the node PROD.

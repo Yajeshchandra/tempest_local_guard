@@ -30,6 +30,14 @@ ENV_UNKNOWN = "NON_PROD"  # generic non-prod bucket when no specific tag applies
 # path (e.g. "tests/prod_fixtures/"): more specific/dangerous envs win.
 _ENV_PRIORITY = [ENV_PROD, ENV_STAGING, ENV_QA, ENV_TEST, ENV_DEV]
 
+# Non-prod environments treated as leak SOURCES by Rule (b): only EXPLICITLY
+# marked non-prod roles — test and dev (which includes seed scripts / dev
+# tooling via folder_markers). The generic ENV_UNKNOWN bucket is deliberately
+# EXCLUDED: on a real repo with no prod/ folder, the app's own production data
+# layer (e.g. app/services.py) also lands in ENV_UNKNOWN, and flagging it would
+# be a false positive. STAGING/QA are excluded too (a different concern).
+NONPROD_LEAK_ENVS = frozenset({ENV_TEST, ENV_DEV})
+
 
 def _normalize_path(source_file: str) -> str:
     """Normalize a possibly-absolute, possibly-backslashed path to forward

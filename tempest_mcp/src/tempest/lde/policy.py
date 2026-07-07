@@ -23,7 +23,7 @@ from tempest.lde.path_reconstruct import build_path_evidence
 from tempest.lde.pbn_selector import select_pbns, select_prod_data_sources
 from tempest.lde.reachability import ancestors_of_pbn
 from tempest.rie.boundary import NodeClassification
-from tempest.rie.env_map import ENV_TEST
+from tempest.rie.env_map import ENV_TEST, NONPROD_LEAK_ENVS
 from tempest.rim import RepositoryIntelligenceModel
 
 
@@ -44,6 +44,9 @@ def evaluate_rule_b(
     graph, classifications, config = rim.graph, rim.classifications, rim.config
     write_relations = set(config.get("write_edge_relations", ["calls", "instantiates", "uses"]))
     pbn_types = {"database", "storage", "messaging"}
+    # Sink-labeled non-prod code (log/debug/dump) reaching prod is Rule (c)'s
+    # domain — skip it here so one leak isn't double-reported under both rules.
+    sink_patterns = [p.lower() for p in config.get("sink_patterns", [])]
 
     pbns = select_pbns(classifications, pbn_types=pbn_types)
     findings: list[Finding] = []
@@ -51,15 +54,16 @@ def evaluate_rule_b(
     for pbn_id in pbns:
         reach = ancestors_of_pbn(graph, pbn_id, classifications)
         test_ancestors = {
-            nid for nid in reach.ancestors if classifications[nid].env_tag == ENV_TEST
+            nid for nid in reach.ancestors
+            if classifications[nid].env_tag in NONPROD_LEAK_ENVS
         }
 
         # Graphify sometimes emits edges in the wrong direction (PBN→test instead
-        # of test→PBN). Also check TEST descendants of the PBN so we catch both.
+        # of test→PBN). Also check non-prod descendants of the PBN to catch both.
         test_descendants = {
             nid
             for nid in nx.descendants(graph, pbn_id)
-            if nid in classifications and classifications[nid].env_tag == ENV_TEST
+            if nid in classifications and classifications[nid].env_tag in NONPROD_LEAK_ENVS
         }
 
         test_candidates = test_ancestors | test_descendants
@@ -88,6 +92,9 @@ def evaluate_rule_b(
             src_label = src_data.get("label") or ""
             if not (src_data.get("source_location") and src_label.endswith("()")):
                 continue
+            src_label_l = (src_data.get("norm_label") or src_label).lower()
+            if any(p in src_label_l for p in sink_patterns):
+                continue  # sink-labeled → Rule (c), not Rule (b)
             paths = build_path_evidence(graph, source_id, pbn_id, max_paths, max_path_length)
             # For inverted edges, paths may be empty (source→PBN doesn't exist).
             # Build a reverse path instead.
