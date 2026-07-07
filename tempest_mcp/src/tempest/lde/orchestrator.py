@@ -55,6 +55,9 @@ def run_detection(repo_root: str | Path) -> Report:
     pbn_count = sum(1 for c in classifications.values() if c.is_pbn)
     prod_count = sum(1 for c in classifications.values() if c.is_prod)
 
+    from collections import Counter
+    env_histogram = dict(Counter(c.env_tag for c in classifications.values()))
+
     return Report(
         repo_root=str(paths.repo_root),
         findings=findings,
@@ -63,4 +66,5 @@ def run_detection(repo_root: str | Path) -> Report:
         prod_node_count=prod_count,
         pbn_count=pbn_count,
         duration_seconds=duration,
+        env_histogram=env_histogram,
     )

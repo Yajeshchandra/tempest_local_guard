@@ -16,12 +16,13 @@ Solves ALL four Tier 2 threat categories:
     P-08  Secrets inside IDE artifact files (.vscode/settings.json, etc.)
 
 Architecture position:
-    Orchestrator  →  PayloadEngine.scan(file_paths)  →  findings list
-    (This engine is ONLY called by orchestrator.py — never call it directly
-    from adapters or the git hook.)
+    payload/scan.py  →  PayloadEngine.scan(file_paths)  →  findings list
+    Driven by the standalone content scan (`tempest_scan_content` MCP tool),
+    which walks the whole repo tree. Independent of the graph/dataflow pipeline
+    (`tempest_detect`); needs no graph.json.
 
-Teammates import:
-    from leak_detector_agent.engines.payload_engine import PayloadEngine
+Import:
+    from tempest.payload.engine import PayloadEngine
 """
 
 import json
@@ -125,7 +126,7 @@ class PayloadEngine:
 
     def scan(self, file_paths: list[str]) -> list[dict]:
         """
-        Main entry point. Called by the orchestrator for every git commit.
+        Main entry point. Called by payload/scan.py with the repo's file list.
 
         Args:
             file_paths: List of absolute or relative paths to staged files.

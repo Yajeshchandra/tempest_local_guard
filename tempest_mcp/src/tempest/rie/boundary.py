@@ -300,6 +300,10 @@ def classify_graph(
 ) -> dict[str, NodeClassification]:
     """Classify every node in the graph. Returns a dict of node_id -> NodeClassification."""
     repo_root = Path(repo_root)
+    # The source-text cache is keyed by path and lives for the process. The MCP
+    # server is long-lived across many repos and re-syncs, so clear it per run
+    # to avoid serving stale file content after an edit + re-sync.
+    _SOURCE_TEXT_CACHE.clear()
     overrides = load_overrides(repo_root)
     prod_identifier_patterns = _compile_prod_identifier_patterns(config)
     scanner_patterns = _compile_scanner_patterns(config)

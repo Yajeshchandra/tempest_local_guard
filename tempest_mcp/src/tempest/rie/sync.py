@@ -9,6 +9,7 @@ server — we shell out to its CLI exactly as a developer would.
 from __future__ import annotations
 
 import json
+import logging
 import os
 import shutil
 import subprocess
@@ -19,6 +20,8 @@ from pathlib import Path
 
 from tempest.paths import GRAPHIFY_OUT_DIR_NAME, TEMPEST_DIR_NAME, RepoPaths
 from tempest.rie.branch_state import get_branch_state
+
+logger = logging.getLogger("tempest")
 
 
 class GraphifyNotFoundError(RuntimeError):

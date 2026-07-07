@@ -19,6 +19,7 @@ class Report:
     prod_node_count: int
     pbn_count: int
     duration_seconds: float
+    env_histogram: dict = field(default_factory=dict)
     scan_id: str = field(default_factory=lambda: uuid.uuid4().hex[:12])
     scanned_at: str = field(default_factory=lambda: time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()))
 
@@ -36,6 +37,7 @@ class Report:
                 "edge_count": self.edge_count,
                 "prod_node_count": self.prod_node_count,
                 "pbn_count": self.pbn_count,
+                "env_histogram": self.env_histogram,
                 "finding_count": len(self.findings),
                 "findings_by_rule": by_rule,
                 "duration_seconds": self.duration_seconds,
