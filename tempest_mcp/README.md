@@ -88,33 +88,6 @@ Download or copy the latest repo over your existing folder, then reinstall in pl
 pipx install --force ./tempest_mcp     # uv: uv tool install --force ./tempest_mcp
 ```
 
-### Uninstalling
-
-1. **Remove the `tempest-server` command:**
-
-   ```bash
-   pipx uninstall tempest-mcp          # if you installed with pipx
-   # or
-   uv tool uninstall tempest-mcp       # if you installed with uv
-   ```
-
-2. **Unregister it from any MCP client** you added it to:
-
-   ```bash
-   claude mcp remove tempest           # Claude Code
-   codex mcp remove tempest            # Codex CLI
-   ```
-
-   For GitHub Copilot / Ollama bridges, delete the `tempest` entry from the
-   config file you edited (`.vscode/mcp.json`, `mcp.json`, `servers.json`, etc.).
-
-3. **(Optional) Delete cached state** from any repo you scanned — Tempest keeps
-   everything under one directory, so removing it leaves no trace:
-
-   ```bash
-   rm -rf <repo>/.tempest
-   ```
-
 ## Register with an MCP client
 
 Point your agent at the `tempest-server` command you installed above. Pick the

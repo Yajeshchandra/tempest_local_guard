@@ -22,6 +22,7 @@ from tempest.rie.boundary import (
 from tempest.rie.graph_loader import GraphLoadError, load_graph
 from tempest.rie.sync import GraphifyExtractError, GraphifyNotFoundError, sync_repo
 from tempest.paths import RepoPaths
+from tempest.payload.scan import run_content_scan
 from tempest.storage.db import get_report, list_scans, save_report
 
 logging.basicConfig(level=logging.INFO, stream=None)
@@ -201,6 +202,42 @@ def tempest_classify_boundary(
         "source_location": node_data.get("source_location"),
     }
     return result
+
+
+@mcp.tool()
+def tempest_scan_content(repo_path: str) -> dict[str, Any]:
+    """Standalone content scan for hardcoded secrets, PII, and high-entropy
+    strings across the whole repository tree.
+
+    Independent of the code graph — does NOT require `tempest_sync`. Walks
+    every file in the repo (skipping .git/node_modules/build/etc.), detects:
+      - hardcoded credentials (AWS/GitHub/Slack/Stripe/GCP/JWT/DB URIs/...)
+      - secrets in .env files
+      - customer PII in fixtures/seed data (emails, SSNs, cards, IBANs, ...)
+      - PII/secrets in Jupyter notebook cells and outputs
+      - auth tokens in VCR cassettes and IDE config artifacts
+      - binary build artifacts staged for commit
+    Each finding is tagged with a path-based environment (PROD/TEST/DEV/...).
+
+    This is separate from `tempest_detect` (the graph/dataflow leak rules) and
+    writes its own report to `<repo>/.tempest/content_scan_report.json`.
+
+    Args:
+        repo_path: Absolute path to the root of the repository to scan.
+
+    Returns:
+        A report with a summary (counts by type/severity/env) and a list of
+        findings, each with file, line, type, severity, redacted match,
+        description, entropy, and env tag.
+    """
+    try:
+        report = run_content_scan(repo_path)
+    except Exception as exc:  # never let a bad file crash the tool
+        logger.warning("Content scan failed: %s", exc)
+        return {"error": "content_scan_failed", "message": str(exc)}
+
+    report["ok"] = True
+    return report
 
 
 def run() -> None:
