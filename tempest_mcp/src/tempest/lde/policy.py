@@ -27,6 +27,20 @@ from tempest.rie.env_map import ENV_TEST, NONPROD_LEAK_ENVS
 from tempest.rim import RepositoryIntelligenceModel
 
 
+def _confidence_from_reasons(reasons: list[str]) -> str:
+    """How strong is the signal that this source is non-prod code?
+      high   — framework import (pytest/faker/...): near-unambiguous test/dev code
+      medium — folder or filename convention (tests/, test_*, seed*, scripts/)
+      low    — anything weaker (kept for completeness)
+    """
+    joined = " ".join(reasons).lower()
+    if "nonprod_import" in joined:
+        return "high"
+    if "path heuristic" in joined:  # folder or filename marker
+        return "medium"
+    return "low"
+
+
 # ---------------------------------------------------------------------------
 # Rule (b) — test/seed code writing to a prod resource.
 # ---------------------------------------------------------------------------
@@ -95,6 +109,10 @@ def evaluate_rule_b(
             src_label_l = (src_data.get("norm_label") or src_label).lower()
             if any(p in src_label_l for p in sink_patterns):
                 continue  # sink-labeled → Rule (c), not Rule (b)
+            # Skip the module that DEFINES the resource client — that's the
+            # boundary itself, not non-prod code reaching it.
+            if src_data.get("source_file") and src_data.get("source_file") == graph.nodes.get(pbn_id, {}).get("source_file"):
+                continue
             paths = build_path_evidence(graph, source_id, pbn_id, max_paths, max_path_length)
             # For inverted edges, paths may be empty (source→PBN doesn't exist).
             # Build a reverse path instead.
@@ -104,14 +122,17 @@ def evaluate_rule_b(
             findings.append(
                 Finding(
                     rule="b",
-                    rule_name="test_or_seed_code_writes_to_prod_resource",
+                    rule_name="non_prod_code_reaches_prod_resource",
                     severity="high",
+                    confidence=_confidence_from_reasons(classifications[source_id].reasons),
                     source_node=summarize_node(graph, source_id),
                     target_node=summarize_node(graph, pbn_id),
                     paths=paths,
                     evidence={
                         "pbn_type": pbn_type,
                         "matched_relations": sorted(write_relations),
+                        "source_env": classifications[source_id].env_tag,
+                        "why_non_prod": classifications[source_id].reasons,
                     },
                     suggested_fix=(
                         "Point this test/seed code at a local or test-environment "

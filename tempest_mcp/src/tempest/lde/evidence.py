@@ -16,12 +16,14 @@ class Finding:
     paths: list[list[dict]] = field(default_factory=list)
     evidence: dict[str, Any] = field(default_factory=dict)
     suggested_fix: str = ""
+    confidence: str = "medium"  # "high" | "medium" | "low" — strength of the non-prod signal
 
     def to_dict(self) -> dict:
         return {
             "rule": self.rule,
             "rule_name": self.rule_name,
             "severity": self.severity,
+            "confidence": self.confidence,
             "source_node": self.source_node,
             "target_node": self.target_node,
             "paths": self.paths,

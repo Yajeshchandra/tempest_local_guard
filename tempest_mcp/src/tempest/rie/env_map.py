@@ -54,6 +54,24 @@ def _match_env_file_markers(filename: str, markers: dict[str, list[str]]) -> str
     return None
 
 
+def _match_filename_markers(path: str, markers: dict[str, list[str]]) -> str | None:
+    """Match the file basename against per-env glob patterns (case-insensitive).
+    Resolves conflicts via env priority (more specific/dangerous wins)."""
+    basename = PurePosixPath(path).name.lower()
+    matches = []
+    for env, patterns in markers.items():
+        for pat in patterns:
+            if fnmatch.fnmatch(basename, pat.lower()):
+                matches.append(env.upper())
+                break
+    if not matches:
+        return None
+    for env in _ENV_PRIORITY:
+        if env in matches:
+            return env
+    return matches[0]
+
+
 def _match_folder_markers(path: str, markers: dict[str, list[str]]) -> str | None:
     segments = [s.lower() for s in PurePosixPath(path).parts]
     matches = []
@@ -98,11 +116,20 @@ def classify_env_for_path(source_file: str | None, config: dict[str, Any]) -> st
     if filename_hit:
         return filename_hit
 
-    # (3) Folder-naming conventions.
+    # (3) Folder-naming conventions. An explicit folder location wins over the
+    # filename fallback (a seed_*.py under tests/ is TEST, not DEV).
     folder_markers = boundary_cfg.get("folder_markers", {})
     folder_hit = _match_folder_markers(path, folder_markers)
     if folder_hit:
         return folder_hit
+
+    # (3b) Filename glob markers (test_*, seed*, *factory*, *.ipynb, ...) — the
+    # generalization fallback: catches non-prod files that live in NO recognized
+    # folder (e.g. lib/backfill_users.py), so a leak in a weirdly-organized repo
+    # is still found. Matched against the basename.
+    filename_marker_hit = _match_filename_markers(path, boundary_cfg.get("filename_markers", {}))
+    if filename_marker_hit:
+        return filename_marker_hit
 
     # (4) Regex/identifier heuristics are content-based and handled
     # separately in boundary.py, since they need access to source text,

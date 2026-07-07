@@ -40,6 +40,39 @@ boundary:
       - ".env.qa"
       - "qa.env"
 
+  # (2b) Filename markers — matched against the file BASENAME (case-insensitive
+  # fnmatch glob). These generalize non-prod detection beyond folders: a
+  # test_*/seed_*/*factory* file is non-prod wherever it lives, so a leak in a
+  # weirdly-organized repo is still caught. Checked before folder markers.
+  filename_markers:
+    test:
+      - "test_*"
+      - "*_test.*"
+      - "*_tests.*"
+      - "tests.*"
+      - "conftest.*"
+      - "*_spec.*"
+      - "spec_*"
+    dev:
+      - "seed*"
+      - "*_seed.*"
+      - "*seeds.*"
+      - "*factory.*"
+      - "*factories.*"
+      - "*fixture*"
+      - "fake_*"
+      - "mock_*"
+      - "dummy_*"
+      - "demo*"
+      - "example*"
+      - "sample_*"
+      - "benchmark*"
+      - "bench_*"
+      - "scratch*"
+      - "playground*"
+      - "backfill*"
+      - "*.ipynb"
+
   # (3) Folder-naming conventions. Matched as a path-segment substring
   # against the node's source_file (case-insensitive).
   folder_markers:
@@ -87,6 +120,29 @@ boundary:
   # as a plausible secret/credential when combined with a prod identifier
   # match nearby. Used by Rule (a).
   min_secret_entropy: 3.0
+
+# Framework-import markers — the strongest signal that a file is non-prod
+# (test/seed/dev) code regardless of its name or folder. If a node's source
+# file contains one of these substrings, an otherwise-unclassified (NON_PROD)
+# node is upgraded to TEST. Add your own homegrown test/fixture frameworks here.
+nonprod_import_markers:
+  - "import pytest"
+  - "from pytest"
+  - "import unittest"
+  - "from unittest"
+  - "import nose"
+  - "import faker"
+  - "from faker"
+  - "factory_boy"
+  - "from factory"
+  - "import hypothesis"
+  - "from hypothesis"
+  - "import moto"
+  - "from moto"
+  - "import responses"
+  - "import vcr"
+  - "from freezegun"
+  - "testcontainers"
 
 # ---------------------------------------------------------------------------
 # Production Boundary Node (PBN): PROD-tagged AND structurally a resource

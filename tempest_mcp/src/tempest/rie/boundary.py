@@ -176,6 +176,23 @@ def _content_matches_prod_identifier(
     return any(p.search(lit) for lit in literals for p in patterns)
 
 
+def _content_matches_nonprod_import(
+    source_file: str | None, repo_root: Path, config: dict[str, Any]
+) -> bool:
+    """True if the file imports a test/mock/dev framework (pytest, faker, moto,
+    …). The strongest generalized signal that code is non-prod regardless of
+    its name or folder. Checked against full file text (imports aren't string
+    literals)."""
+    markers = config.get("nonprod_import_markers", [])
+    if not markers or not source_file:
+        return False
+    text = _read_source_near(source_file, repo_root)
+    if not text:
+        return False
+    low = text.lower()
+    return any(m.lower() in low for m in markers)
+
+
 def _annotate_scanner_findings(
     node_data: dict, source_file: str | None, repo_root: Path, patterns: dict[str, re.Pattern]
 ) -> None:
@@ -269,6 +286,16 @@ def classify_node(
 
     # Annotate graph node with discovery scanner findings
     _annotate_scanner_findings(node_data, source_file, repo_root, scanner_patterns)
+
+    # Framework-import signal: the strongest generalized non-prod marker. A
+    # file importing pytest/faker/moto/... is test/dev code wherever it lives —
+    # upgrade an otherwise-unclassified node to TEST so its reach into a prod
+    # resource is caught even with no test/ folder or test_* filename. Checked
+    # before the prod-identifier content check so a test file that merely holds
+    # a prod hostname string stays TEST (the leak), not PROD.
+    if env_tag == ENV_UNKNOWN and _content_matches_nonprod_import(source_file, repo_root, config):
+        env_tag = ENV_TEST
+        reasons.append("content matched nonprod_import_markers")
 
     # Content-based regex is the lowest-priority signal in the heuristic
     # chain: it only fires when the path itself gave no signal at all

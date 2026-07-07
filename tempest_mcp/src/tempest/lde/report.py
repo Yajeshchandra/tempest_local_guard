@@ -23,10 +23,29 @@ class Report:
     scan_id: str = field(default_factory=lambda: uuid.uuid4().hex[:12])
     scanned_at: str = field(default_factory=lambda: time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()))
 
+    _SEV_RANK = {"critical": 0, "high": 1, "medium": 2, "low": 3}
+    _CONF_RANK = {"high": 0, "medium": 1, "low": 2}
+
+    def _sorted_findings(self) -> list[Finding]:
+        """Most actionable first: severity, then confidence, then rule. Keeps
+        high-confidence leaks (framework-import/marker-detected) above the
+        low-confidence triage tail."""
+        return sorted(
+            self.findings,
+            key=lambda f: (
+                self._SEV_RANK.get(f.severity, 4),
+                self._CONF_RANK.get(f.confidence, 3),
+                f.rule,
+                f.rule_name,
+            ),
+        )
+
     def to_dict(self) -> dict:
         by_rule = {"a": 0, "b": 0, "c": 0}
+        by_confidence: dict[str, int] = {}
         for f in self.findings:
             by_rule[f.rule] = by_rule.get(f.rule, 0) + 1
+            by_confidence[f.confidence] = by_confidence.get(f.confidence, 0) + 1
 
         return {
             "scan_id": self.scan_id,
@@ -40,9 +59,10 @@ class Report:
                 "env_histogram": self.env_histogram,
                 "finding_count": len(self.findings),
                 "findings_by_rule": by_rule,
+                "findings_by_confidence": by_confidence,
                 "duration_seconds": self.duration_seconds,
             },
-            "findings": [f.to_dict() for f in self.findings],
+            "findings": [f.to_dict() for f in self._sorted_findings()],
         }
 
     def to_markdown(self) -> str:
@@ -67,11 +87,8 @@ class Report:
             lines.append("No findings.")
             return "\n".join(lines) + "\n"
 
-        # Sort findings: high severity first, then by rule
-        sorted_findings = sorted(
-            self.findings, 
-            key=lambda f: (0 if f.severity == "critical" else 1 if f.severity == "high" else 2, f.rule, f.rule_name)
-        )
+        # Sort: severity, then confidence, then rule (shared with to_dict).
+        sorted_findings = self._sorted_findings()
 
         for index, finding in enumerate(sorted_findings, start=1):
             source_file = finding.source_node.get("source_file") or "unknown"
@@ -82,6 +99,7 @@ class Report:
                 f"### {index}. {finding.rule_name} (Rule {finding.rule.upper()})",
                 "",
                 f"- **Severity:** {finding.severity.upper()}",
+                f"- **Confidence:** {finding.confidence.upper()}",
                 f"- **Location:** `{location}`",
                 f"- **Source Node:** {finding.source_node.get('label') or 'unknown'}",
             ])
