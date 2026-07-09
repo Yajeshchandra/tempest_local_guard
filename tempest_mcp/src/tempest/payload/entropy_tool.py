@@ -1,9 +1,17 @@
 """
 entropy_tool.py
 ───────────────
-Calculates Shannon Entropy of a string to decide if it looks like a
-random secret (high entropy) or a normal human-readable value (low entropy).
+Shannon entropy measurement tool.
 
+Provides calculate_entropy() and is_high_entropy() as *measurements only*.
+This module never decides whether a token is a secret — that is the
+responsibility of the engine's policy evaluation layer.
+
+Entropy is used exclusively as supporting evidence to enrich an existing
+Candidate.  It NEVER creates a Candidate on its own.
+
+Design rule: if you find yourself importing this module to decide whether
+to emit a finding, that logic belongs in engine.py, not here.
 
 DO NOT IMPORT network libraries here.
 """

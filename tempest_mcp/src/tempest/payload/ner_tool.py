@@ -10,11 +10,19 @@ Covers:
           credit card numbers, IP addresses, passport-style IDs)
     P-07  PII in recorded VCR cassette response bodies
 
+Provider role
+─────────────
+collect_pii_candidates() is the canonical provider function.  It returns
+Candidate objects.  Entropy is irrelevant for PII (SSNs, emails, credit
+cards are structurally validated) and is skipped by the enrichment layer
+for PII candidates.
+
 NO external model downloads. NO network imports.
 """
 
 import re
 import sys
+from tempest.payload.candidate import Candidate, make_pii_candidate
 
 # ── PII Patterns ──────────────────────────────────────────────────────────────
 # Each entry:
@@ -131,9 +139,21 @@ def _redact_pii(value: str, label: str) -> str:
     return f"[REDACTED:{label.split()[0].upper()}]"
 
 
-def scan_line_for_pii(line: str, line_number: int, file_path: str) -> list[dict]:
+def collect_pii_candidates(
+    line: str,
+    line_number: int,
+    file_path: str,
+) -> list[Candidate]:
     """
-    Scan a single line of text for PII patterns.
+    Scan a single line of text for PII patterns and return Candidate objects.
+
+    This is the canonical provider function for the candidate/evidence pipeline.
+    PII candidates are structurally validated by their regex pattern, so:
+      • confidence_locked = True   — severity is always pattern-defined
+      • required_signals  = set()  — entropy is irrelevant and bypassed
+
+    The enrichment layer will still add context keywords and file-path
+    signals to PII candidates — it only skips the entropy computation.
 
     Args:
         line        : Raw text content of the line
@@ -141,10 +161,10 @@ def scan_line_for_pii(line: str, line_number: int, file_path: str) -> list[dict]
         file_path   : Path of the file being scanned
 
     Returns:
-        List of PII finding dicts. Empty list if nothing found.
+        List of PII Candidate objects.  Empty list if nothing found.
     """
-    findings: list[dict] = []
-    seen_labels: set[str] = set()   # one finding per PII type per line
+    candidates: list[Candidate] = []
+    seen_labels: set[str] = set()
 
     for meta, pattern in _COMPILED_PII:
         match = pattern.search(line)
@@ -157,18 +177,19 @@ def scan_line_for_pii(line: str, line_number: int, file_path: str) -> list[dict]
         seen_labels.add(label_key)
 
         raw_value = match.group(0)
-        findings.append({
-            "file": file_path,
-            "line": line_number,
-            "type": meta["type"],
-            "severity": meta["severity"],
-            "match_redacted": _redact_pii(raw_value, meta["label"]),
-            "description": f"PII detected: {meta['label']}",
-            "source": "payload",
-            "entropy": 0.0,
-        })
+        candidates.append(
+            make_pii_candidate(
+                file=file_path,
+                line=line_number,
+                raw_value=raw_value,
+                redacted_value=_redact_pii(raw_value, meta["label"]),
+                policy_type=meta["type"],
+                base_severity=meta["severity"],
+                pii_label=meta["label"],
+            )
+        )
 
-    return findings
+    return candidates
 
 
 def calculate_pii_density(lines: list[str]) -> float:
@@ -184,7 +205,7 @@ def calculate_pii_density(lines: list[str]) -> float:
 
     pii_line_count = 0
     for i, line in enumerate(lines, start=1):
-        if scan_line_for_pii(line, i, ""):
+        if collect_pii_candidates(line, i, ""):
             pii_line_count += 1
 
-    return pii_line_count / len(lines)
+    return pii_line_count / len(lines)

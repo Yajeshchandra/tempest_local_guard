@@ -1,0 +1,721 @@
+{
+  "generated_at": "2026-07-09T19:01:56.156092+00:00",
+  "timestamp": "20260709T185214Z",
+  "wall_time_s": 581.3,
+  "repos": [
+    {
+      "repo": "kustomize",
+      "error": "Command '['git', 'clone', '--depth=1', '--branch', 'v5.4.3', 'https://github.com/kubernetes-sigs/kustomize.git', 'C:\\\\Users\\\\DELL\\\\OneDrive\\\\Desktop\\\\TechM_proj\\\\tempest_local_guard\\\\tempest_mcp\\\\benchmark_cache\\\\kustomize']' returned non-zero exit status 128.",
+      "total_findings": -1
+    },
+    {
+      "repo": "flux2",
+      "url": "https://github.com/fluxcd/flux2.git",
+      "commit": "v2.3.0",
+      "notes": "GitOps, lots of K8s YAML, base64 secrets in examples",
+      "files_scanned": 626,
+      "loc": 52876,
+      "kloc": 52.9,
+      "scan_time_s": 12.93,
+      "total_findings": 18,
+      "fp_per_kloc": 0.34,
+      "by_severity": {
+        "HIGH": 18
+      },
+      "by_type": {
+        "P-01": 8,
+        "P-04": 10
+      },
+      "by_evidence_kind": {
+        "regex": 8,
+        "pii": 10
+      },
+      "top_noisy_files": [
+        {
+          "file": "C:\\Users\\DELL\\OneDrive\\Desktop\\TechM_proj\\tempest_local_guard\\tempest_mcp\\benchmark_cache\\flux2\\cmd\\flux\\testdata\\get\\objects.yaml",
+          "count": 3
+        },
+        {
+          "file": "C:\\Users\\DELL\\OneDrive\\Desktop\\TechM_proj\\tempest_local_guard\\tempest_mcp\\benchmark_cache\\flux2\\cmd\\flux\\testdata\\export\\objects.yaml",
+          "count": 2
+        },
+        {
+          "file": "C:\\Users\\DELL\\OneDrive\\Desktop\\TechM_proj\\tempest_local_guard\\tempest_mcp\\benchmark_cache\\flux2\\cmd\\flux\\create_secret_git_test.go",
+          "count": 1
+        },
+        {
+          "file": "C:\\Users\\DELL\\OneDrive\\Desktop\\TechM_proj\\tempest_local_guard\\tempest_mcp\\benchmark_cache\\flux2\\cmd\\flux\\testdata\\build-kustomization\\podinfo-result.yaml",
+          "count": 1
+        },
+        {
+          "file": "C:\\Users\\DELL\\OneDrive\\Desktop\\TechM_proj\\tempest_local_guard\\tempest_mcp\\benchmark_cache\\flux2\\cmd\\flux\\testdata\\create_secret\\git\\git-bearer-token.yaml",
+          "count": 1
+        },
+        {
+          "file": "C:\\Users\\DELL\\OneDrive\\Desktop\\TechM_proj\\tempest_local_guard\\tempest_mcp\\benchmark_cache\\flux2\\cmd\\flux\\testdata\\create_secret\\git\\git-ssh-secret-password.yaml",
+          "count": 1
+        },
+        {
+          "file": "C:\\Users\\DELL\\OneDrive\\Desktop\\TechM_proj\\tempest_local_guard\\tempest_mcp\\benchmark_cache\\flux2\\cmd\\flux\\testdata\\create_secret\\git\\git-ssh-secret.yaml",
+          "count": 1
+        },
+        {
+          "file": "C:\\Users\\DELL\\OneDrive\\Desktop\\TechM_proj\\tempest_local_guard\\tempest_mcp\\benchmark_cache\\flux2\\cmd\\flux\\testdata\\create_secret\\tls\\deprecated-secret-tls.yaml",
+          "count": 1
+        },
+        {
+          "file": "C:\\Users\\DELL\\OneDrive\\Desktop\\TechM_proj\\tempest_local_guard\\tempest_mcp\\benchmark_cache\\flux2\\cmd\\flux\\testdata\\create_secret\\tls\\secret-tls.yaml",
+          "count": 1
+        },
+        {
+          "file": "C:\\Users\\DELL\\OneDrive\\Desktop\\TechM_proj\\tempest_local_guard\\tempest_mcp\\benchmark_cache\\flux2\\cmd\\flux\\testdata\\envsubst\\file.yaml",
+          "count": 1
+        }
+      ],
+      "sample_findings": [
+        {
+          "file": "C:\\Users\\DELL\\OneDrive\\Desktop\\TechM_proj\\tempest_local_guard\\tempest_mcp\\benchmark_cache\\flux2\\cmd\\flux\\create_secret_git_test.go",
+          "line": 46,
+          "type": "P-01",
+          "severity": "HIGH",
+          "match_redacted": "ghp_****",
+          "evidence": [
+            "regex:P-01-GITHUB-TOKEN",
+            "entropy:4.92",
+            "context:secret,bearer,auth",
+            "file_path:sensitive"
+          ]
+        },
+        {
+          "file": "C:\\Users\\DELL\\OneDrive\\Desktop\\TechM_proj\\tempest_local_guard\\tempest_mcp\\benchmark_cache\\flux2\\cmd\\flux\\testdata\\build-kustomization\\podinfo-result.yaml",
+          "line": 146,
+          "type": "P-01",
+          "severity": "HIGH",
+          "match_redacted": "**SO****",
+          "evidence": [
+            "regex:P-01-HARDCODED-PASSWORD",
+            "context:password",
+            "file_path:low-value"
+          ]
+        },
+        {
+          "file": "C:\\Users\\DELL\\OneDrive\\Desktop\\TechM_proj\\tempest_local_guard\\tempest_mcp\\benchmark_cache\\flux2\\cmd\\flux\\testdata\\create_secret\\git\\git-bearer-token.yaml",
+          "line": 8,
+          "type": "P-01",
+          "severity": "HIGH",
+          "match_redacted": "ghp_****",
+          "evidence": [
+            "regex:P-01-GITHUB-TOKEN",
+            "entropy:4.92",
+            "file_path:sensitive"
+          ]
+        },
+        {
+          "file": "C:\\Users\\DELL\\OneDrive\\Desktop\\TechM_proj\\tempest_local_guard\\tempest_mcp\\benchmark_cache\\flux2\\cmd\\flux\\testdata\\create_secret\\git\\git-ssh-secret-password.yaml",
+          "line": 9,
+          "type": "P-01",
+          "severity": "HIGH",
+          "match_redacted": "----****",
+          "evidence": [
+            "regex:P-01-PRIVATE-KEY-BLOCK",
+            "context:private",
+            "file_path:sensitive"
+          ]
+        },
+        {
+          "file": "C:\\Users\\DELL\\OneDrive\\Desktop\\TechM_proj\\tempest_local_guard\\tempest_mcp\\benchmark_cache\\flux2\\cmd\\flux\\testdata\\create_secret\\git\\git-ssh-secret.yaml",
+          "line": 9,
+          "type": "P-01",
+          "severity": "HIGH",
+          "match_redacted": "----****",
+          "evidence": [
+            "regex:P-01-PRIVATE-KEY-BLOCK",
+            "context:private",
+            "file_path:sensitive"
+          ]
+        },
+        {
+          "file": "C:\\Users\\DELL\\OneDrive\\Desktop\\TechM_proj\\tempest_local_guard\\tempest_mcp\\benchmark_cache\\flux2\\cmd\\flux\\testdata\\create_secret\\tls\\deprecated-secret-tls.yaml",
+          "line": 56,
+          "type": "P-01",
+          "severity": "HIGH",
+          "match_redacted": "----****",
+          "evidence": [
+            "regex:P-01-PRIVATE-KEY-BLOCK",
+            "context:private",
+            "file_path:sensitive"
+          ]
+        },
+        {
+          "file": "C:\\Users\\DELL\\OneDrive\\Desktop\\TechM_proj\\tempest_local_guard\\tempest_mcp\\benchmark_cache\\flux2\\cmd\\flux\\testdata\\create_secret\\tls\\secret-tls.yaml",
+          "line": 53,
+          "type": "P-01",
+          "severity": "HIGH",
+          "match_redacted": "----****",
+          "evidence": [
+            "regex:P-01-PRIVATE-KEY-BLOCK",
+            "context:private",
+            "file_path:sensitive"
+          ]
+        },
+        {
+          "file": "C:\\Users\\DELL\\OneDrive\\Desktop\\TechM_proj\\tempest_local_guard\\tempest_mcp\\benchmark_cache\\flux2\\cmd\\flux\\testdata\\envsubst\\file.yaml",
+          "line": 10,
+          "type": "P-04",
+          "severity": "HIGH",
+          "match_redacted": "****@github.com",
+          "evidence": [
+            "pii:Email address",
+            "file_path:low-value"
+          ]
+        },
+        {
+          "file": "C:\\Users\\DELL\\OneDrive\\Desktop\\TechM_proj\\tempest_local_guard\\tempest_mcp\\benchmark_cache\\flux2\\cmd\\flux\\testdata\\export\\git-repo.yaml",
+          "line": 14,
+          "type": "P-04",
+          "severity": "HIGH",
+          "match_redacted": "****@github.com",
+          "evidence": [
+            "pii:Email address",
+            "file_path:low-value"
+          ]
+        },
+        {
+          "file": "C:\\Users\\DELL\\OneDrive\\Desktop\\TechM_proj\\tempest_local_guard\\tempest_mcp\\benchmark_cache\\flux2\\cmd\\flux\\testdata\\export\\image-update.yaml",
+          "line": 11,
+          "type": "P-04",
+          "severity": "HIGH",
+          "match_redacted": "****@users.noreply.github.com",
+          "evidence": [
+            "pii:Email address",
+            "file_path:low-value"
+          ]
+        },
+        {
+          "file": "C:\\Users\\DELL\\OneDrive\\Desktop\\TechM_proj\\tempest_local_guard\\tempest_mcp\\benchmark_cache\\flux2\\cmd\\flux\\testdata\\export\\objects.yaml",
+          "line": 67,
+          "type": "P-04",
+          "severity": "HIGH",
+          "match_redacted": "****@users.noreply.github.com",
+          "evidence": [
+            "pii:Email address",
+            "file_path:low-value"
+          ]
+        },
+        {
+          "file": "C:\\Users\\DELL\\OneDrive\\Desktop\\TechM_proj\\tempest_local_guard\\tempest_mcp\\benchmark_cache\\flux2\\cmd\\flux\\testdata\\export\\objects.yaml",
+          "line": 85,
+          "type": "P-04",
+          "severity": "HIGH",
+          "match_redacted": "****@github.com",
+          "evidence": [
+            "pii:Email address",
+            "file_path:low-value"
+          ]
+        },
+        {
+          "file": "C:\\Users\\DELL\\OneDrive\\Desktop\\TechM_proj\\tempest_local_guard\\tempest_mcp\\benchmark_cache\\flux2\\cmd\\flux\\testdata\\get\\objects.yaml",
+          "line": 20,
+          "type": "P-04",
+          "severity": "HIGH",
+          "match_redacted": "****@github.com",
+          "evidence": [
+            "pii:Email address",
+            "file_path:low-value"
+          ]
+        },
+        {
+          "file": "C:\\Users\\DELL\\OneDrive\\Desktop\\TechM_proj\\tempest_local_guard\\tempest_mcp\\benchmark_cache\\flux2\\cmd\\flux\\testdata\\get\\objects.yaml",
+          "line": 49,
+          "type": "P-04",
+          "severity": "HIGH",
+          "match_redacted": "****@github.com",
+          "evidence": [
+            "pii:Email address",
+            "file_path:low-value"
+          ]
+        },
+        {
+          "file": "C:\\Users\\DELL\\OneDrive\\Desktop\\TechM_proj\\tempest_local_guard\\tempest_mcp\\benchmark_cache\\flux2\\cmd\\flux\\testdata\\get\\objects.yaml",
+          "line": 78,
+          "type": "P-04",
+          "severity": "HIGH",
+          "match_redacted": "****@github.com",
+          "evidence": [
+            "pii:Email address",
+            "file_path:low-value"
+          ]
+        },
+        {
+          "file": "C:\\Users\\DELL\\OneDrive\\Desktop\\TechM_proj\\tempest_local_guard\\tempest_mcp\\benchmark_cache\\flux2\\cmd\\flux\\testdata\\trace\\deployment.yaml",
+          "line": 151,
+          "type": "P-04",
+          "severity": "HIGH",
+          "match_redacted": "****@github.com",
+          "evidence": [
+            "pii:Email address",
+            "file_path:sensitive"
+          ]
+        },
+        {
+          "file": "C:\\Users\\DELL\\OneDrive\\Desktop\\TechM_proj\\tempest_local_guard\\tempest_mcp\\benchmark_cache\\flux2\\cmd\\flux\\testdata\\trace\\helmrelease.yaml",
+          "line": 75,
+          "type": "P-04",
+          "severity": "HIGH",
+          "match_redacted": "****@github.com",
+          "evidence": [
+            "pii:Email address",
+            "file_path:low-value"
+          ]
+        },
+        {
+          "file": "C:\\Users\\DELL\\OneDrive\\Desktop\\TechM_proj\\tempest_local_guard\\tempest_mcp\\benchmark_cache\\flux2\\pkg\\manifestgen\\sourcesecret\\sourcesecret_test.go",
+          "line": 42,
+          "type": "P-01",
+          "severity": "HIGH",
+          "match_redacted": "pass****",
+          "evidence": [
+            "regex:P-01-HARDCODED-PASSWORD",
+            "context:password",
+            "file_path:sensitive"
+          ]
+        }
+      ]
+    },
+    {
+      "repo": "pytorch",
+      "url": "https://github.com/pytorch/pytorch.git",
+      "commit": "v2.3.1",
+      "notes": "Python/C++, test fixtures, unicode tables, worst entropy noise",
+      "files_scanned": 11413,
+      "loc": 2014365,
+      "kloc": 2014.4,
+      "scan_time_s": 226.18,
+      "total_findings": 0,
+      "fp_per_kloc": 0.0,
+      "by_severity": {},
+      "by_type": {},
+      "by_evidence_kind": {},
+      "top_noisy_files": [],
+      "sample_findings": []
+    },
+    {
+      "repo": "sqlite",
+      "url": "https://github.com/sqlite/sqlite.git",
+      "commit": "version-3.46.0",
+      "notes": "C source, checksums, generated files",
+      "files_scanned": 2193,
+      "loc": 1834806,
+      "kloc": 1834.8,
+      "scan_time_s": 21.36,
+      "total_findings": 0,
+      "fp_per_kloc": 0.0,
+      "by_severity": {},
+      "by_type": {},
+      "by_evidence_kind": {},
+      "top_noisy_files": [],
+      "sample_findings": []
+    },
+    {
+      "repo": "ansible",
+      "url": "https://github.com/ansible/ansible.git",
+      "commit": "v2.17.1",
+      "notes": "YAML-heavy infra, variable assignments, vault references",
+      "files_scanned": 4859,
+      "loc": 371235,
+      "kloc": 371.2,
+      "scan_time_s": 137.19,
+      "total_findings": 114,
+      "fp_per_kloc": 0.31,
+      "by_severity": {
+        "HIGH": 102,
+        "MEDIUM": 12
+      },
+      "by_type": {
+        "P-01": 95,
+        "P-06": 5,
+        "P-04": 14
+      },
+      "by_evidence_kind": {
+        "regex": 89,
+        "assignment": 6,
+        "binary": 5,
+        "pii": 14
+      },
+      "top_noisy_files": [
+        {
+          "file": "C:\\Users\\DELL\\OneDrive\\Desktop\\TechM_proj\\tempest_local_guard\\tempest_mcp\\benchmark_cache\\ansible\\lib\\ansible\\plugins\\lookup\\password.py",
+          "count": 5
+        },
+        {
+          "file": "C:\\Users\\DELL\\OneDrive\\Desktop\\TechM_proj\\tempest_local_guard\\tempest_mcp\\benchmark_cache\\ansible\\test\\integration\\targets\\user\\tasks\\test_create_user_password.yml",
+          "count": 5
+        },
+        {
+          "file": "C:\\Users\\DELL\\OneDrive\\Desktop\\TechM_proj\\tempest_local_guard\\tempest_mcp\\benchmark_cache\\ansible\\test\\integration\\targets\\user\\tasks\\test_password_lock.yml",
+          "count": 5
+        },
+        {
+          "file": "C:\\Users\\DELL\\OneDrive\\Desktop\\TechM_proj\\tempest_local_guard\\tempest_mcp\\benchmark_cache\\ansible\\test\\integration\\targets\\win_become\\tasks\\main.yml",
+          "count": 5
+        },
+        {
+          "file": "C:\\Users\\DELL\\OneDrive\\Desktop\\TechM_proj\\tempest_local_guard\\tempest_mcp\\benchmark_cache\\ansible\\test\\units\\plugins\\connection\\test_connection.py",
+          "count": 5
+        },
+        {
+          "file": "C:\\Users\\DELL\\OneDrive\\Desktop\\TechM_proj\\tempest_local_guard\\tempest_mcp\\benchmark_cache\\ansible\\test\\units\\plugins\\become\\test_sudo.py",
+          "count": 4
+        },
+        {
+          "file": "C:\\Users\\DELL\\OneDrive\\Desktop\\TechM_proj\\tempest_local_guard\\tempest_mcp\\benchmark_cache\\ansible\\test\\integration\\targets\\ansible-vault\\script\\vault-secret.sh",
+          "count": 3
+        },
+        {
+          "file": "C:\\Users\\DELL\\OneDrive\\Desktop\\TechM_proj\\tempest_local_guard\\tempest_mcp\\benchmark_cache\\ansible\\test\\integration\\targets\\become_unprivileged\\setup_unpriv_users.yml",
+          "count": 3
+        },
+        {
+          "file": "C:\\Users\\DELL\\OneDrive\\Desktop\\TechM_proj\\tempest_local_guard\\tempest_mcp\\benchmark_cache\\ansible\\test\\integration\\targets\\delegate_to\\has_hostvars.yml",
+          "count": 3
+        },
+        {
+          "file": "C:\\Users\\DELL\\OneDrive\\Desktop\\TechM_proj\\tempest_local_guard\\tempest_mcp\\benchmark_cache\\ansible\\test\\integration\\targets\\uri\\tasks\\use_gssapi.yml",
+          "count": 3
+        }
+      ],
+      "sample_findings": [
+        {
+          "file": "C:\\Users\\DELL\\OneDrive\\Desktop\\TechM_proj\\tempest_local_guard\\tempest_mcp\\benchmark_cache\\ansible\\lib\\ansible\\modules\\expect.py",
+          "line": 93,
+          "type": "P-01",
+          "severity": "HIGH",
+          "match_redacted": "MySe****",
+          "evidence": [
+            "regex:P-01-HARDCODED-PASSWORD",
+            "file_path:sensitive"
+          ]
+        },
+        {
+          "file": "C:\\Users\\DELL\\OneDrive\\Desktop\\TechM_proj\\tempest_local_guard\\tempest_mcp\\benchmark_cache\\ansible\\lib\\ansible\\modules\\get_url.py",
+          "line": 272,
+          "type": "P-01",
+          "severity": "HIGH",
+          "match_redacted": "{{ m****",
+          "evidence": [
+            "regex:P-01-HARDCODED-PASSWORD",
+            "context:password",
+            "file_path:sensitive"
+          ]
+        },
+        {
+          "file": "C:\\Users\\DELL\\OneDrive\\Desktop\\TechM_proj\\tempest_local_guard\\tempest_mcp\\benchmark_cache\\ansible\\lib\\ansible\\modules\\uri.py",
+          "line": 329,
+          "type": "P-01",
+          "severity": "HIGH",
+          "match_redacted": "{{ j****",
+          "evidence": [
+            "regex:P-01-HARDCODED-PASSWORD",
+            "context:password",
+            "file_path:sensitive"
+          ]
+        },
+        {
+          "file": "C:\\Users\\DELL\\OneDrive\\Desktop\\TechM_proj\\tempest_local_guard\\tempest_mcp\\benchmark_cache\\ansible\\lib\\ansible\\module_utils\\urls.py",
+          "line": 720,
+          "type": "P-01",
+          "severity": "HIGH",
+          "match_redacted": "pass****",
+          "evidence": [
+            "regex:P-01-HARDCODED-PASSWORD",
+            "context:password,passwd",
+            "file_path:sensitive"
+          ]
+        },
+        {
+          "file": "C:\\Users\\DELL\\OneDrive\\Desktop\\TechM_proj\\tempest_local_guard\\tempest_mcp\\benchmark_cache\\ansible\\lib\\ansible\\module_utils\\csharp\\Ansible.AccessToken.cs",
+          "line": 284,
+          "type": "P-01",
+          "severity": "MEDIUM",
+          "match_redacted": "(Nat****",
+          "evidence": [
+            "assignment:python",
+            "entropy:4.59",
+            "context:token",
+            "file_path:sensitive"
+          ]
+        },
+        {
+          "file": "C:\\Users\\DELL\\OneDrive\\Desktop\\TechM_proj\\tempest_local_guard\\tempest_mcp\\benchmark_cache\\ansible\\lib\\ansible\\module_utils\\csharp\\Ansible.AccessToken.cs",
+          "line": 296,
+          "type": "P-01",
+          "severity": "MEDIUM",
+          "match_redacted": "(Nat****",
+          "evidence": [
+            "assignment:python",
+            "entropy:4.74",
+            "context:token",
+            "file_path:sensitive"
+          ]
+        },
+        {
+          "file": "C:\\Users\\DELL\\OneDrive\\Desktop\\TechM_proj\\tempest_local_guard\\tempest_mcp\\benchmark_cache\\ansible\\lib\\ansible\\module_utils\\csharp\\Ansible.Become.cs",
+          "line": 511,
+          "type": "P-01",
+          "severity": "MEDIUM",
+          "match_redacted": "(Mar****",
+          "evidence": [
+            "assignment:python",
+            "entropy:4.79",
+            "file_path:sensitive"
+          ]
+        },
+        {
+          "file": "C:\\Users\\DELL\\OneDrive\\Desktop\\TechM_proj\\tempest_local_guard\\tempest_mcp\\benchmark_cache\\ansible\\lib\\ansible\\module_utils\\csharp\\Ansible.Privilege.cs",
+          "line": 346,
+          "type": "P-01",
+          "severity": "MEDIUM",
+          "match_redacted": "Mars****",
+          "evidence": [
+            "assignment:python",
+            "entropy:4.85",
+            "context:token",
+            "file_path:sensitive"
+          ]
+        },
+        {
+          "file": "C:\\Users\\DELL\\OneDrive\\Desktop\\TechM_proj\\tempest_local_guard\\tempest_mcp\\benchmark_cache\\ansible\\lib\\ansible\\plugins\\become\\su.py",
+          "line": 0,
+          "type": "P-06",
+          "severity": "HIGH",
+          "match_redacted": ".py****",
+          "evidence": [
+            "binary:true"
+          ]
+        },
+        {
+          "file": "C:\\Users\\DELL\\OneDrive\\Desktop\\TechM_proj\\tempest_local_guard\\tempest_mcp\\benchmark_cache\\ansible\\lib\\ansible\\plugins\\lookup\\password.py",
+          "line": 91,
+          "type": "P-01",
+          "severity": "HIGH",
+          "match_redacted": "{{ l****",
+          "evidence": [
+            "regex:P-01-HARDCODED-PASSWORD",
+            "context:password",
+            "file_path:sensitive"
+          ]
+        },
+        {
+          "file": "C:\\Users\\DELL\\OneDrive\\Desktop\\TechM_proj\\tempest_local_guard\\tempest_mcp\\benchmark_cache\\ansible\\lib\\ansible\\plugins\\lookup\\password.py",
+          "line": 97,
+          "type": "P-01",
+          "severity": "HIGH",
+          "match_redacted": "{{ l****",
+          "evidence": [
+            "regex:P-01-HARDCODED-PASSWORD",
+            "context:password",
+            "file_path:sensitive"
+          ]
+        },
+        {
+          "file": "C:\\Users\\DELL\\OneDrive\\Desktop\\TechM_proj\\tempest_local_guard\\tempest_mcp\\benchmark_cache\\ansible\\lib\\ansible\\plugins\\lookup\\password.py",
+          "line": 103,
+          "type": "P-01",
+          "severity": "HIGH",
+          "match_redacted": "{{ l****",
+          "evidence": [
+            "regex:P-01-HARDCODED-PASSWORD",
+            "context:password",
+            "file_path:sensitive"
+          ]
+        },
+        {
+          "file": "C:\\Users\\DELL\\OneDrive\\Desktop\\TechM_proj\\tempest_local_guard\\tempest_mcp\\benchmark_cache\\ansible\\lib\\ansible\\plugins\\lookup\\password.py",
+          "line": 109,
+          "type": "P-01",
+          "severity": "HIGH",
+          "match_redacted": "{{ l****",
+          "evidence": [
+            "regex:P-01-HARDCODED-PASSWORD",
+            "context:password",
+            "file_path:sensitive"
+          ]
+        },
+        {
+          "file": "C:\\Users\\DELL\\OneDrive\\Desktop\\TechM_proj\\tempest_local_guard\\tempest_mcp\\benchmark_cache\\ansible\\lib\\ansible\\plugins\\lookup\\password.py",
+          "line": 118,
+          "type": "P-01",
+          "severity": "HIGH",
+          "match_redacted": "{{ l****",
+          "evidence": [
+            "regex:P-01-HARDCODED-PASSWORD",
+            "context:password",
+            "file_path:sensitive"
+          ]
+        },
+        {
+          "file": "C:\\Users\\DELL\\OneDrive\\Desktop\\TechM_proj\\tempest_local_guard\\tempest_mcp\\benchmark_cache\\ansible\\lib\\ansible\\plugins\\lookup\\subelements.py",
+          "line": 68,
+          "type": "P-01",
+          "severity": "HIGH",
+          "match_redacted": "{{ i****",
+          "evidence": [
+            "regex:P-01-HARDCODED-PASSWORD",
+            "context:password",
+            "file_path:sensitive"
+          ]
+        },
+        {
+          "file": "C:\\Users\\DELL\\OneDrive\\Desktop\\TechM_proj\\tempest_local_guard\\tempest_mcp\\benchmark_cache\\ansible\\lib\\ansible\\plugins\\lookup\\url.py",
+          "line": 199,
+          "type": "P-01",
+          "severity": "HIGH",
+          "match_redacted": "hunt****",
+          "evidence": [
+            "regex:P-01-HARDCODED-PASSWORD",
+            "context:private,password",
+            "file_path:sensitive"
+          ]
+        },
+        {
+          "file": "C:\\Users\\DELL\\OneDrive\\Desktop\\TechM_proj\\tempest_local_guard\\tempest_mcp\\benchmark_cache\\ansible\\lib\\ansible\\plugins\\lookup\\url.py",
+          "line": 203,
+          "type": "P-01",
+          "severity": "HIGH",
+          "match_redacted": "hunt****",
+          "evidence": [
+            "regex:P-01-HARDCODED-PASSWORD",
+            "context:private,password,auth",
+            "file_path:sensitive"
+          ]
+        },
+        {
+          "file": "C:\\Users\\DELL\\OneDrive\\Desktop\\TechM_proj\\tempest_local_guard\\tempest_mcp\\benchmark_cache\\ansible\\test\\integration\\targets\\ansible-galaxy-collection\\tasks\\install.yml",
+          "line": 176,
+          "type": "P-01",
+          "severity": "HIGH",
+          "match_redacted": "{{ p****",
+          "evidence": [
+            "regex:P-01-HARDCODED-PASSWORD",
+            "context:password",
+            "file_path:sensitive"
+          ]
+        },
+        {
+          "file": "C:\\Users\\DELL\\OneDrive\\Desktop\\TechM_proj\\tempest_local_guard\\tempest_mcp\\benchmark_cache\\ansible\\test\\integration\\targets\\ansible-galaxy-collection\\tasks\\install.yml",
+          "line": 305,
+          "type": "P-01",
+          "severity": "HIGH",
+          "match_redacted": "{{ p****",
+          "evidence": [
+            "regex:P-01-HARDCODED-PASSWORD",
+            "context:password",
+            "file_path:sensitive"
+          ]
+        },
+        {
+          "file": "C:\\Users\\DELL\\OneDrive\\Desktop\\TechM_proj\\tempest_local_guard\\tempest_mcp\\benchmark_cache\\ansible\\test\\integration\\targets\\ansible-galaxy-collection\\tasks\\main.yml",
+          "line": 25,
+          "type": "P-01",
+          "severity": "HIGH",
+          "match_redacted": "{{ p****",
+          "evidence": [
+            "regex:P-01-HARDCODED-PASSWORD",
+            "context:password",
+            "file_path:sensitive"
+          ]
+        }
+      ]
+    },
+    {
+      "repo": "httpie",
+      "url": "https://github.com/httpie/cli.git",
+      "commit": "3.2.2",
+      "notes": "Python CLI tool, small and fast, good quick sanity check",
+      "files_scanned": 265,
+      "loc": 38390,
+      "kloc": 38.4,
+      "scan_time_s": 12.15,
+      "total_findings": 4,
+      "fp_per_kloc": 0.1,
+      "by_severity": {
+        "LOW": 2,
+        "HIGH": 2
+      },
+      "by_type": {
+        "P-01": 3,
+        "P-06": 1
+      },
+      "by_evidence_kind": {
+        "assignment": 2,
+        "regex": 1,
+        "binary": 1
+      },
+      "top_noisy_files": [
+        {
+          "file": "C:\\Users\\DELL\\OneDrive\\Desktop\\TechM_proj\\tempest_local_guard\\tempest_mcp\\benchmark_cache\\httpie\\httpie\\cli\\argtypes.py",
+          "count": 1
+        },
+        {
+          "file": "C:\\Users\\DELL\\OneDrive\\Desktop\\TechM_proj\\tempest_local_guard\\tempest_mcp\\benchmark_cache\\httpie\\httpie\\output\\lexers\\metadata.py",
+          "count": 1
+        },
+        {
+          "file": "C:\\Users\\DELL\\OneDrive\\Desktop\\TechM_proj\\tempest_local_guard\\tempest_mcp\\benchmark_cache\\httpie\\tests\\test_auth_plugins.py",
+          "count": 1
+        },
+        {
+          "file": "C:\\Users\\DELL\\OneDrive\\Desktop\\TechM_proj\\tempest_local_guard\\tempest_mcp\\benchmark_cache\\httpie\\tests\\fixtures\\test.bin",
+          "count": 1
+        }
+      ],
+      "sample_findings": [
+        {
+          "file": "C:\\Users\\DELL\\OneDrive\\Desktop\\TechM_proj\\tempest_local_guard\\tempest_mcp\\benchmark_cache\\httpie\\httpie\\cli\\argtypes.py",
+          "line": 191,
+          "type": "P-01",
+          "severity": "LOW",
+          "match_redacted": "Auth****",
+          "evidence": [
+            "assignment:python",
+            "entropy:4.63",
+            "context:auth,credentials"
+          ]
+        },
+        {
+          "file": "C:\\Users\\DELL\\OneDrive\\Desktop\\TechM_proj\\tempest_local_guard\\tempest_mcp\\benchmark_cache\\httpie\\httpie\\output\\lexers\\metadata.py",
+          "line": 23,
+          "type": "P-01",
+          "severity": "LOW",
+          "match_redacted": "pygm****",
+          "evidence": [
+            "assignment:python",
+            "entropy:4.52",
+            "context:token"
+          ]
+        },
+        {
+          "file": "C:\\Users\\DELL\\OneDrive\\Desktop\\TechM_proj\\tempest_local_guard\\tempest_mcp\\benchmark_cache\\httpie\\tests\\test_auth_plugins.py",
+          "line": 12,
+          "type": "P-01",
+          "severity": "HIGH",
+          "match_redacted": "pass****",
+          "evidence": [
+            "regex:P-01-HARDCODED-PASSWORD",
+            "context:password"
+          ]
+        },
+        {
+          "file": "C:\\Users\\DELL\\OneDrive\\Desktop\\TechM_proj\\tempest_local_guard\\tempest_mcp\\benchmark_cache\\httpie\\tests\\fixtures\\test.bin",
+          "line": 0,
+          "type": "P-06",
+          "severity": "HIGH",
+          "match_redacted": ".bin****",
+          "evidence": [
+            "binary:true"
+          ]
+        }
+      ]
+    }
+  ]
+}

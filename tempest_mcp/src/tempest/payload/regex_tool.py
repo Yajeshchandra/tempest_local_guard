@@ -11,6 +11,12 @@ Covers:
     P-07  VCR cassette files with recorded API responses containing tokens
     P-08  IDE artifact files (e.g. .vscode/settings.json with tokens)
 
+Provider role
+─────────────
+collect_regex_candidates() is the canonical provider function.  It returns
+Candidate objects — no entropy, no confidence, no finding dicts.  All of
+that happens in the engine’s enrichment and evaluation layers.
+
 NO network imports. Pure regex only.
 """
 
@@ -18,6 +24,7 @@ import re
 import sys
 from typing import Optional
 from tempest.payload.entropy_tool import calculate_entropy
+from tempest.payload.candidate import Candidate, make_regex_candidate
 
 # ── Master Pattern Registry ───────────────────────────────────────────────────
 # Each entry defines:
@@ -210,24 +217,38 @@ def _redact(value: str) -> str:
     return value[:4] + "****"
 
 
-def scan_line(line: str, line_number: int, file_path: str) -> list[dict]:
+# ── Provider function ────────────────────────────────────────────────────────
+
+
+def collect_regex_candidates(
+    line: str,
+    line_number: int,
+    file_path: str,
+) -> list[Candidate]:
     """
-    Run all PATTERNS against a single line of text.
+    Run all PATTERNS against a single line and return Candidate objects.
+
+    This is the canonical provider function for the candidate/evidence pipeline.
+    It does NOT compute entropy, confidence, or evidence beyond the initial
+    regex signal — all of that is the engine’s responsibility.
 
     Args:
-        line        : Raw text of the line (no newline character needed)
+        line        : Raw text of the line (no trailing newline needed)
         line_number : 1-based line number in the file
         file_path   : Full path of the file being scanned
 
     Returns:
-        List of finding dicts. Empty list if nothing found.
-        Each finding has keys: file, line, type, severity,
-                               match_redacted, description, source, entropy
+        List of Candidate objects.  Empty list if nothing matched.
+        Each Candidate has:
+          confidence_locked = True   (severity is always pattern-defined)
+          required_signals  = set()  (no additional signals required)
+          evidence pre-seeded with ["regex:<pattern_name>"]
     """
-    findings: list[dict] = []
-    seen_types_on_line: set[str] = set()   # avoid duplicate type per line
-
     from pathlib import Path
+
+    candidates: list[Candidate] = []
+    seen_types_on_line: set[str] = set()
+
     is_env_file = ".env" in Path(file_path).name.lower()
 
     for name, meta in PATTERNS.items():
@@ -236,30 +257,36 @@ def scan_line(line: str, line_number: int, file_path: str) -> list[dict]:
 
         pattern = _get_compiled(name, meta["regex"])
         if pattern is None:
-            continue  # skip broken patterns, already logged
+            continue
 
         match = pattern.search(line)
         if not match:
             continue
 
-        # Use the first capture group if present, else the whole match
-        raw_match = match.group(1) if match.lastindex and match.lastindex >= 1 else match.group(0)
+        # Use the first capture group if present, else the whole match.
+        raw_match = (
+            match.group(1)
+            if match.lastindex and match.lastindex >= 1
+            else match.group(0)
+        )
 
-        # De-duplicate: one finding per (type, line) — same type cannot appear twice on same line
+        # One candidate per (type, line) — dedup within the same line.
         dedup_key = f"{meta['type']}:{line_number}"
         if dedup_key in seen_types_on_line:
             continue
         seen_types_on_line.add(dedup_key)
 
-        findings.append({
-            "file": file_path,
-            "line": line_number,
-            "type": meta["type"],
-            "severity": meta["severity"],
-            "match_redacted": _redact(raw_match),
-            "description": meta["description"],
-            "source": "payload",
-            "entropy": round(calculate_entropy(raw_match), 2),
-        })
+        candidates.append(
+            make_regex_candidate(
+                file=file_path,
+                line=line_number,
+                raw_value=raw_match,
+                redacted_value=_redact(raw_match),
+                policy_type=meta["type"],
+                base_severity=meta["severity"],
+                pattern_name=name,
+                description=meta["description"],
+            )
+        )
 
-    return findings
+    return candidates
