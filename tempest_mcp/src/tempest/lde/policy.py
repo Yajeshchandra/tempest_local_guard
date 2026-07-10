@@ -556,6 +556,63 @@ def evaluate_rule_a(
     return findings
 
 
+# ---------------------------------------------------------------------------
+# Rule (b/join) — cross-file/cross-language resource-identity join.
+# ---------------------------------------------------------------------------
+def evaluate_rule_resource_join(rim: RepositoryIntelligenceModel) -> list[Finding]:
+    """Flag a non-prod-role file that references a resource identity (DSN/
+    bucket/topic) ALSO declared with a positive prod signal in another file —
+    the cross-language leak the AST graph can't see. See `lde/resource_facts`.
+
+    Fires only on a shared, identifiable resource literal + a prod anchor
+    (explicit prod marker, or committed creds in a manifest/config); a repo with
+    no env distinction in its resource names produces no match (correct)."""
+    from tempest.lde.resource_facts import extract_resource_facts, join_cross_resource_leaks
+    from tempest.payload.scan import _iter_repo_files
+
+    repo_root = Path(rim.repo_root)
+    try:
+        files = _iter_repo_files(repo_root)
+    except OSError:
+        return []
+    facts = extract_resource_facts(files, repo_root, rim.config)
+    findings: list[Finding] = []
+    for leak in join_cross_resource_leaks(facts):
+        findings.append(
+            Finding(
+                rule="b",
+                rule_name="non_prod_code_reaches_prod_resource",
+                severity="high",
+                confidence="medium",
+                source_node={
+                    "id": None, "label": leak["nonprod_file"],
+                    "source_file": leak["nonprod_file"],
+                    "source_location": f"L{leak['nonprod_line']}",
+                },
+                target_node={
+                    "label": leak["resource_id"],
+                    "source_file": leak["prod_declared_in"],
+                    "source_location": f"L{leak['prod_line']}",
+                },
+                paths=[],
+                evidence={
+                    "resource_id": leak["resource_id"],
+                    "nonprod_role": leak["nonprod_role"],
+                    "prod_declared_in": leak["prod_declared_in"],
+                    "detection": "resource_join",
+                },
+                suggested_fix=(
+                    f"This {leak['nonprod_role']}-role file references `{leak['resource_id']}`, "
+                    f"a resource declared with production credentials/markers in "
+                    f"`{leak['prod_declared_in']}`. Point non-prod code at a dedicated "
+                    "test/local resource, and never share a prod connection identity "
+                    "between deployment config and test/seed code."
+                ),
+            )
+        )
+    return findings
+
+
 def evaluate_all_rules(
     rim: RepositoryIntelligenceModel,
 ) -> list[Finding]:
@@ -577,6 +634,14 @@ def evaluate_all_rules(
         if f.source_node.get("source_file") not in graph_b_files
     ]
     findings.extend(b_content)
+
+    # Cross-file/cross-language resource-identity join. Dedupe by source_file so
+    # a leak already caught by graph/content rule (b) isn't double-reported.
+    join_b_files = graph_b_files | {f.source_node.get("source_file") for f in b_content}
+    findings.extend(
+        f for f in evaluate_rule_resource_join(rim)
+        if f.source_node.get("source_file") not in join_b_files
+    )
 
     findings.extend(evaluate_rule_c(rim, max_paths, max_path_length))
     return findings

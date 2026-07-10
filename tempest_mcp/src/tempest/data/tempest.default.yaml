@@ -107,6 +107,7 @@ boundary:
       - "examples"
       - "samples"
       - "notebooks"
+      - "initdb"
 
   # (4) Connection-string / identifier regex heuristics on string literals
   # near a node's source_location. Any match tags the node PROD.
@@ -298,6 +299,9 @@ db_access_patterns:
   - '\.drop_all\s*\('
   - '\.bulk_(save|insert|create|update)'
   - '(?i)\b(INSERT\s+INTO|UPDATE\s+\w+\s+SET|DELETE\s+FROM)\b'
+  - '\.(insertMany|insertOne|insert_many|insert_one|updateMany|updateOne|bulkWrite)\s*\('  # Mongo (Node/py)
+  - '(?i)\bpsql\b.*(-c|<|-f)'                                                               # shell psql exec
+  - '(?i)\b(COPY\s+\w+\s+FROM|LOAD\s+DATA)\b'                                               # bulk load
 
 # Rule (b) content fallback prod-gate: a DB-op match above is only a leak if
 # the file ALSO shows positive evidence it's really talking to prod — either

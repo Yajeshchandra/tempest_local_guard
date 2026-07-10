@@ -373,3 +373,50 @@ def test_multilang_test_double_without_prod_id_not_pbn(tmp_path):
     assert len(syn) == 1
     c = classify_node(syn[0], g.nodes[syn[0]], config, tmp_path, {})
     assert c.env_tag == "TEST" and not c.is_pbn
+
+
+# ---------------------------------------------------------------------------
+# Phase 2/4 — resource-identity join (cross-file/cross-language)
+# ---------------------------------------------------------------------------
+from tempest.lde.resource_facts import extract_resource_facts, join_cross_resource_leaks
+
+
+def _facts(tmp_path, files: dict):
+    for rel, body in files.items():
+        p = tmp_path / rel
+        p.parent.mkdir(parents=True, exist_ok=True)
+        p.write_text(body, encoding="utf-8")
+    paths = [str(tmp_path / rel) for rel in files]
+    return extract_resource_facts(paths, tmp_path, load_default_config())
+
+
+def test_join_fires_on_prod_resource_referenced_by_nonprod(tmp_path):
+    dsn = "postgresql://app:pw@prod-db.example.com:5432/appdb"
+    facts = _facts(tmp_path, {
+        "k8s/config.yaml": f"env:\n  DATABASE_URL: {dsn}\n",     # prod anchor (prod host)
+        "tests/seed_data.py": f'conn = connect("{dsn}")\n',       # non-prod ref
+    })
+    leaks = join_cross_resource_leaks(facts)
+    assert len(leaks) == 1
+    assert leaks[0]["nonprod_file"] == "tests/seed_data.py"
+    assert "prod-db.example.com" in leaks[0]["resource_id"]
+
+
+def test_join_quiet_on_localhost_ci_db(tmp_path):
+    # The fastapi_realworld tests.yml false positive: localhost CI DB + .example
+    dsn = "postgresql://postgres:postgres@localhost/postgres"
+    facts = _facts(tmp_path, {
+        ".env.example": f"DATABASE_URL={dsn}\n",
+        ".github/workflows/tests.yml": f"      DATABASE_URL: {dsn}\n",
+    })
+    assert join_cross_resource_leaks(facts) == []
+
+
+def test_join_quiet_on_env_agnostic_service_name(tmp_path):
+    # bank-of-anthos shape: same service-name DSN everywhere, no prod marker.
+    dsn = "postgresql://admin:pw@accounts-db:5432/accounts-db"
+    facts = _facts(tmp_path, {
+        "kubernetes-manifests/accounts-db.yaml": f"uri: {dsn}\n",
+        "tests/load_test.py": f'connect("{dsn}")\n',
+    })
+    assert join_cross_resource_leaks(facts) == []
