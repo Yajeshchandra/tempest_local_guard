@@ -227,6 +227,12 @@ def _classify_boundary(
         repos the resource sits in no prod/ folder; it's just "the database".
       • Broad label-substring `pbn_patterns` stay PROD-gated (noisy on their own).
     """
+    # 0. Synthetic multi-language resource-client node (from augment_graph_
+    #    multilang) carries its type explicitly — trust it (we created it from a
+    #    verified client call/inheritance regex; no graphify label to match).
+    if node_data.get("_pbn_type"):
+        return True, node_data["_pbn_type"]
+
     # 1. Connection-string / cloud-resource scanner findings — high confidence,
     #    env-agnostic.
     findings = node_data.get("scanner_findings", {})

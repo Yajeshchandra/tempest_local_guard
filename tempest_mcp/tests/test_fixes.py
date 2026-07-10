@@ -319,3 +319,57 @@ def test_real_secret_still_flagged(tmp_path):
     # Regression guard: a genuine AWS key must survive all the new skips.
     findings = _scan(tmp_path, "config.py", 'AWS_KEY = "AKIAZ7Q9TESTNPROD4NP"\n')
     assert any(f["type"] == "P-01" for f in findings)
+
+
+# ---------------------------------------------------------------------------
+# Phase 3 — multi-language resource-client recognition (synthetic PBNs)
+# ---------------------------------------------------------------------------
+from tempest.rie.augment import augment_graph_multilang
+
+
+def _graph_with_file(tmp_path, rel, body, env_dir=""):
+    """Build a 1-node graph anchored to a written source file."""
+    rel_path = (env_dir + "/" + rel).lstrip("/") if env_dir else rel
+    p = tmp_path / rel_path
+    p.parent.mkdir(parents=True, exist_ok=True)
+    p.write_text(body, encoding="utf-8")
+    g = nx.DiGraph()
+    g.add_node("mod", label="Mod", source_file=rel_path, source_location="L1", file_type="code")
+    return g, rel_path
+
+
+def test_multilang_dbcontext_becomes_pbn(tmp_path):
+    g, rel = _graph_with_file(tmp_path, "src/CatalogContext.cs", "public class CatalogContext : DbContext\n{\n}\n")
+    config = load_default_config()
+    augment_graph_multilang(g, tmp_path, config)
+    syn = [n for n, d in g.nodes(data=True) if d.get("_pbn_type")]
+    assert len(syn) == 1
+    c = classify_node(syn[0], g.nodes[syn[0]], config, tmp_path, {})
+    assert c.is_pbn and c.pbn_type == "database"
+
+
+def test_multilang_go_pgxpool_becomes_pbn(tmp_path):
+    g, rel = _graph_with_file(tmp_path, "src/loader.go", "func load() {\n  pool, _ := pgxpool.NewWithConfig(ctx, cfg)\n}\n")
+    config = load_default_config()
+    augment_graph_multilang(g, tmp_path, config)
+    assert any(d.get("_pbn_type") == "database" for _, d in g.nodes(data=True))
+
+
+def test_multilang_skips_python_files(tmp_path):
+    # Python is handled by the AST pass; the multi-lang regex pass must ignore .py
+    g, rel = _graph_with_file(tmp_path, "src/db.py", "conn = psycopg2.connect(DSN)\n")
+    config = load_default_config()
+    augment_graph_multilang(g, tmp_path, config)
+    assert not any(d.get("_pbn_type") for _, d in g.nodes(data=True))
+
+
+def test_multilang_test_double_without_prod_id_not_pbn(tmp_path):
+    # A resource client in a TEST file with no co-located prod identifier stays
+    # non-PBN (the Fix 4a gate still applies to synthetic nodes).
+    g, rel = _graph_with_file(tmp_path, "FakeCache.cs", "class FakeCache : IDistributedCache {}\n", env_dir="tests")
+    config = load_default_config()
+    augment_graph_multilang(g, tmp_path, config)
+    syn = [n for n, d in g.nodes(data=True) if d.get("_pbn_type")]
+    assert len(syn) == 1
+    c = classify_node(syn[0], g.nodes[syn[0]], config, tmp_path, {})
+    assert c.env_tag == "TEST" and not c.is_pbn

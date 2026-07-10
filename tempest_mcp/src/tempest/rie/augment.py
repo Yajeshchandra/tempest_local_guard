@@ -9,6 +9,7 @@ inline driver/SDK call instead of a shared prod module.
 from __future__ import annotations
 
 import ast
+import re
 from pathlib import Path
 from typing import Any
 
@@ -161,5 +162,103 @@ def augment_graph_with_ast(
                 _synthetic=True,
             )
             graph.add_edge(func_node_id, synthetic_id, relation="calls")
+
+    return graph
+
+
+# ---------------------------------------------------------------------------
+# Multi-language regex augmentation (Phase 3).
+# ---------------------------------------------------------------------------
+_NONPY_SOURCE_SUFFIXES = (
+    ".cs", ".go", ".java", ".js", ".ts", ".php", ".rb", ".kt", ".scala", ".cpp",
+)
+
+
+def augment_graph_multilang(
+    graph: nx.DiGraph, repo_root: str | Path, config: dict[str, Any]
+) -> nx.DiGraph:
+    """Recognize DB/cache/queue clients in NON-Python source via regex, since
+    graphify labels the access class after the app (CatalogContext,
+    RedisCartStore), not the client library — so `resource_client_patterns`
+    substring matching misses them. For each `resource_client_regexes` match in
+    a non-Python file, anchor a synthetic PBN node (of the matched type) to the
+    nearest enclosing code node (class/function) by line, so Rules (b)/(c) and
+    boundary classification see the resource boundary. One synthetic node per
+    (file, type). Mutates and returns `graph`.
+
+    Synthetic nodes carry `_synthetic` + `_pbn_type`; `classify_node` still
+    applies the DEV/TEST co-located-prod-identifier gate, so a test double
+    (FakeRedis in a test file with no prod id) stays non-PBN.
+    """
+    regex_cfg = config.get("resource_client_regexes", {})
+    if not regex_cfg:
+        return graph
+    compiled: dict[str, list[re.Pattern]] = {
+        pbn_type: [re.compile(p) for p in pats]
+        for pbn_type, pats in regex_cfg.items()
+    }
+
+    repo_root = Path(repo_root)
+
+    # source_file -> sorted [(lineno, node_id)] for every code node with a line,
+    # plus a representative fallback node id for the file.
+    code_lines_by_file: dict[str, list[tuple[int, str]]] = {}
+    file_fallback: dict[str, str] = {}
+    nonpy_files: set[str] = set()
+    for node_id, data in graph.nodes(data=True):
+        sf = data.get("source_file")
+        if not sf:
+            continue
+        if sf.lower().endswith(_NONPY_SOURCE_SUFFIXES):
+            nonpy_files.add(sf)
+        file_fallback.setdefault(sf, node_id)
+        loc = data.get("source_location") or ""
+        if loc.startswith("L"):
+            try:
+                code_lines_by_file.setdefault(sf, []).append((int(loc[1:]), node_id))
+            except ValueError:
+                continue
+    for sf in code_lines_by_file:
+        code_lines_by_file[sf].sort()
+
+    def _anchor(source_file: str, line: int) -> str:
+        best = None
+        for ln, nid in code_lines_by_file.get(source_file, []):
+            if ln <= line:
+                best = nid
+            else:
+                break
+        return best or file_fallback[source_file]
+
+    for source_file in nonpy_files:
+        path = Path(source_file)
+        if not path.is_absolute():
+            path = repo_root / source_file
+        if not path.exists():
+            continue
+        try:
+            lines = path.read_text(encoding="utf-8", errors="ignore").splitlines()
+        except OSError:
+            continue
+
+        seen_types: set[str] = set()  # one synthetic PBN per (file, type)
+        for i, text in enumerate(lines, 1):
+            for pbn_type, patterns in compiled.items():
+                if pbn_type in seen_types:
+                    continue
+                if any(p.search(text) for p in patterns):
+                    anchor_id = _anchor(source_file, i)
+                    synthetic_id = f"{source_file}::synthetic_pbn::{pbn_type}::{i}"
+                    graph.add_node(
+                        synthetic_id,
+                        label=f"{pbn_type}_client()",
+                        file_type="code",
+                        source_file=source_file,
+                        source_location=f"L{i}",
+                        _synthetic=True,
+                        _pbn_type=pbn_type,
+                    )
+                    graph.add_edge(anchor_id, synthetic_id, relation="calls")
+                    seen_types.add(pbn_type)
 
     return graph

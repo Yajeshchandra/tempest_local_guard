@@ -230,6 +230,48 @@ resource_client_patterns:
     - "sqsclient"
 
 # ---------------------------------------------------------------------------
+# Multi-language resource-client REGEXES (Phase 3). graphify labels the DB/
+# cache/queue access CLASS after the app (CatalogContext, RedisCartStore), not
+# the client library, so label-substring matching (resource_client_patterns)
+# misses them in C#/Go/Java/etc. These regexes match the actual client
+# call/inheritance site in SOURCE TEXT; the multi-lang augment pass anchors a
+# synthetic PBN of the given type to the nearest enclosing code node. Applied
+# to non-Python files only (Python has its own AST augment pass). Redis is
+# typed `database` (stateful data resource) so Rules (b)/(c) cover it.
+resource_client_regexes:
+  database:
+    - ':\s*DbContext\b'                      # C# EF Core context class
+    - '\bUseNpgsql\s*\('
+    - '\bUseSqlServer\s*\('
+    - '\bAddNpgsqlDbContext\b'
+    - '\bAddSqlServerDbContext\b'
+    - '\bnew\s+SqlConnection\s*\('
+    - '\bnew\s+NpgsqlConnection\s*\('
+    - '\bIDistributedCache\b'                # C# distributed cache (often Redis)
+    - '\bConnectionMultiplexer\.Connect\s*\('  # StackExchange.Redis
+    - '\bsql\.Open\s*\('                     # Go database/sql
+    - '\bpgxpool\.(New|Connect|ParseConfig)'  # Go pgx
+    - '\bpgx\.Connect\s*\('
+    - '\bsqlx\.(Open|Connect)\s*\('
+    - '\bgorm\.Open\s*\('
+    - '\bmongo\.Connect\s*\('
+    - '\bmongo\.NewClient\s*\('
+    - '\bredis\.NewClient\s*\('              # Go go-redis
+    - '\bredis\.NewFailoverClient\s*\('
+    - '\bnew\s+Jedis\s*\('                   # Java Redis
+    - '\bmongoose\.connect\s*\('             # Node
+  storage:
+    - '\bs3\.New(FromConfig)?\s*\('          # Go AWS SDK
+    - '\bstorage\.NewClient\s*\('            # Go GCS
+    - '\bBlobServiceClient\b'                # C# Azure Blob
+    - '\bnew\s+AmazonS3Client\s*\('          # C# AWS
+  messaging:
+    - '\bkafka\.New(Writer|Reader)\b'        # Go segmentio/kafka-go
+    - '\bsarama\.New(SyncProducer|AsyncProducer|Consumer)\b'
+    - '\bamqp\.Dial\s*\('                    # RabbitMQ
+    - '\bnew\s+ConnectionFactory\s*\('       # Java RabbitMQ/JMS
+
+# ---------------------------------------------------------------------------
 # Policy rule (b): edge relations counted as "writes to" / structurally
 # reaches a PBN via calls/uses.
 # ---------------------------------------------------------------------------
