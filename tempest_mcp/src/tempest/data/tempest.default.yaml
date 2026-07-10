@@ -239,6 +239,54 @@ write_edge_relations:
   - "uses"
 
 # ---------------------------------------------------------------------------
+# Rule (b) content fallback — DB-access operations detected in the SOURCE of
+# non-prod code. graphify's AST graph does NOT model ORM/framework database
+# access (a module-level `db = SQLAlchemy()`, attribute-chain `db.session.add`,
+# or inheritance-injected `.save()`), so on real Flask/Django apps there is no
+# PBN and no path for reachability to find. This catches those leaks by what
+# the non-prod code textually DOES. Regex, matched line-by-line; only scanned
+# in TEST/DEV-role files, so the app's own data layer is never flagged.
+db_access_patterns:
+  - '\.session\.(add|commit|delete|merge|flush|bulk_save_objects|bulk_insert_mappings|execute)'
+  - '\.save\s*\('
+  - '\.objects\.(create|bulk_create|update|delete|get_or_create|filter|all|raw)'
+  - '\.execute\s*\('
+  - 'create_engine\s*\('
+  - '\.create_all\s*\('
+  - '\.drop_all\s*\('
+  - '\.bulk_(save|insert|create|update)'
+  - '(?i)\b(INSERT\s+INTO|UPDATE\s+\w+\s+SET|DELETE\s+FROM)\b'
+
+# Rule (b) content fallback prod-gate: a DB-op match above is only a leak if
+# the file ALSO shows positive evidence it's really talking to prod — either
+# an explicit prod config marker, or a prod-identifier/database_url literal
+# (boundary.prod_identifier_patterns / scanner_patterns.database_url, reused
+# from Rule a). Without this gate, any plain unit test calling
+# .save()/.create_all() reads as a leak, which it isn't.
+prod_config_markers:
+  - "ProdConfig"
+  - "ProductionConfig"
+  - "prod_config"
+  - "PROD_DATABASE"
+  - "production_settings"
+
+# Rule (b) structural: target labels matching these are the app's own
+# connection lifecycle plumbing (open/close/teardown), not a data write —
+# skip them so a test fixture booting/closing the real app isn't flagged.
+# NOTE: deliberately excludes "connect" — that's the literal method name in
+# augmented resource-client PBN labels (psycopg2.connect(), asyncpg.connect())
+# and would suppress the real leaks those nodes exist to catch.
+lifecycle_exclusions:
+  - "close"
+  - "disconnect"
+  - "shutdown"
+  - "teardown"
+  - "startup"
+  - "dispose"
+  - "on_startup"
+  - "on_shutdown"
+
+# ---------------------------------------------------------------------------
 # Policy rule (c): non-prod sink labels (log/debug/dump destinations).
 # ---------------------------------------------------------------------------
 sink_patterns:

@@ -87,6 +87,7 @@ SUPPORTED_EXTENSIONS: frozenset[str] = frozenset({
     ".env", ".env.local", ".env.test", ".env.example",            # env files
     ".yaml", ".yml", ".json", ".toml", ".ini", ".cfg", ".config", # config
     ".xml", ".properties",                                         # more config
+    ".csv", ".tsv",                                                # tabular fixtures (P-04 PII)
     ".ipynb",                                                      # Jupyter
     ".txt", ".md",                                                 # text
     ".sh", ".bash", ".zsh",                                        # shell

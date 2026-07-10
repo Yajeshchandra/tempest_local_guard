@@ -317,8 +317,28 @@ def classify_node(
     # clients (connection strings, precise SDK/driver patterns) are detected
     # regardless of env tag; a DEV LocalDatabase or a TEST fake is a resource
     # boundary but not a *production* one, so it's excluded here.
+    #
+    # Exception, scoped to `_synthetic` nodes only (inserted by the AST
+    # augmentation pass for third-party client calls graphify doesn't emit,
+    # e.g. `psycopg2.connect(PROD_DSN)` inside a scripts/ debug helper): a
+    # synthetic node's own call site, if the file also holds a literal prod
+    # identifier, IS the real production resource, not a stub/fake — promote
+    # it to PBN and to is_prod. This must stay scoped to synthetic nodes: a
+    # blanket file-wide check would also promote every ordinary node sharing
+    # a file with a prod-looking string (e.g. Rule a's own planted-secret
+    # fixtures), which would wrongly hide them from Rule a's is_prod-gated scan.
     is_boundary, boundary_type = _classify_boundary(node_data, config, is_prod)
-    is_pbn = is_boundary and env_tag not in (ENV_DEV, ENV_TEST)
+    has_companion_prod_identifier = False
+    if node_data.get("_synthetic") and is_boundary and env_tag in (ENV_DEV, ENV_TEST):
+        has_companion_prod_identifier = _content_matches_prod_identifier(
+            source_file, repo_root, prod_identifier_patterns
+        )
+        if has_companion_prod_identifier:
+            is_prod = True
+            reasons.append(
+                "prod_identifier_patterns matched in same file -> promoted despite DEV/TEST env"
+            )
+    is_pbn = is_boundary and (env_tag not in (ENV_DEV, ENV_TEST) or has_companion_prod_identifier)
     pbn_type = boundary_type if is_pbn else None
     if is_pbn:
         reasons.append(f"structural PBN match -> {pbn_type}")

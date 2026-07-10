@@ -61,11 +61,19 @@ def evaluate_rule_b(
     # Sink-labeled non-prod code (log/debug/dump) reaching prod is Rule (c)'s
     # domain — skip it here so one leak isn't double-reported under both rules.
     sink_patterns = [p.lower() for p in config.get("sink_patterns", [])]
+    # Connection lifecycle plumbing (open/close/teardown) isn't a data write —
+    # a test fixture booting/closing the app's real DB pool shouldn't fire.
+    lifecycle_patterns = [p.lower() for p in config.get("lifecycle_exclusions", [])]
 
     pbns = select_pbns(classifications, pbn_types=pbn_types)
     findings: list[Finding] = []
 
     for pbn_id in pbns:
+        pbn_data = graph.nodes.get(pbn_id, {})
+        pbn_label_l = (pbn_data.get("norm_label") or pbn_data.get("label") or "").lower()
+        if any(p in pbn_label_l for p in lifecycle_patterns):
+            continue  # lifecycle plumbing, not a data write
+
         reach = ancestors_of_pbn(graph, pbn_id, classifications)
         test_ancestors = {
             nid for nid in reach.ancestors
@@ -110,8 +118,16 @@ def evaluate_rule_b(
             if any(p in src_label_l for p in sink_patterns):
                 continue  # sink-labeled → Rule (c), not Rule (b)
             # Skip the module that DEFINES the resource client — that's the
-            # boundary itself, not non-prod code reaching it.
-            if src_data.get("source_file") and src_data.get("source_file") == graph.nodes.get(pbn_id, {}).get("source_file"):
+            # boundary itself, not non-prod code reaching it. Doesn't apply to
+            # synthetic PBNs: those are anchored to their enclosing function in
+            # the SAME file by construction (an inline `psycopg2.connect(...)`
+            # call in the leaky script itself), so same-file is the leak, not
+            # a false "you're the definer" match.
+            if (
+                not pbn_data.get("_synthetic")
+                and src_data.get("source_file")
+                and src_data.get("source_file") == pbn_data.get("source_file")
+            ):
                 continue
             paths = build_path_evidence(graph, source_id, pbn_id, max_paths, max_path_length)
             # For inverted edges, paths may be empty (source→PBN doesn't exist).
@@ -142,6 +158,131 @@ def evaluate_rule_b(
                     ),
                 )
             )
+
+    return findings
+
+
+# ---------------------------------------------------------------------------
+# Rule (b) content fallback — DB access in non-prod source (ORM-aware).
+# ---------------------------------------------------------------------------
+def evaluate_rule_b_content(rim: RepositoryIntelligenceModel) -> list[Finding]:
+    """Catch non-prod code that performs database operations, by scanning its
+    SOURCE — independent of graphify's edges.
+
+    Why this exists: graphify's AST graph does not model ORM/framework DB
+    access. On Flask-SQLAlchemy the DB object is a module-level instance
+    (`db = SQLAlchemy()`, no node), access is an attribute chain
+    (`db.session.add`, no edge), and `.save()` is injected by inheritance (no
+    edge). So the graph contains no PBN and no path — evaluate_rule_b finds
+    nothing even for a blatant leak. This detector flags TEST/DEV-role files
+    whose text performs DB writes, catching the ORM leaks reachability misses.
+    Only non-prod-ROLE files are scanned, so the app's own data layer (generic
+    NON_PROD) is never flagged.
+    """
+    graph, classifications, config, repo_root = (
+        rim.graph, rim.classifications, rim.config, Path(rim.repo_root)
+    )
+    patterns = [re.compile(p) for p in config.get("db_access_patterns", [])]
+    if not patterns:
+        return []
+
+    # Prod-resource gate: a DB-op match is only a leak if the file also shows
+    # POSITIVE evidence it's talking to prod (an explicit prod config marker,
+    # or a prod-identifier/database_url literal). Absence of a test marker
+    # isn't enough to conclude "prod" — a plain unit test calling `.save()`
+    # via an ambient pytest fixture (e.g. test_models.py) has no config text
+    # of its own either way, so require prod evidence unconditionally rather
+    # than only when a test double is textually recognizable.
+    prod_config_markers = config.get("prod_config_markers", [])
+    boundary_cfg = config.get("boundary", {})
+    prod_identifier_patterns = [
+        re.compile(p, re.IGNORECASE) for p in boundary_cfg.get("prod_identifier_patterns", [])
+    ]
+    database_url_pattern = config.get("scanner_patterns", {}).get("database_url")
+    database_url_re = re.compile(database_url_pattern, re.IGNORECASE) if database_url_pattern else None
+
+    # First non-prod-role node seen per file → representative source + reasons.
+    file_env: dict[str, tuple[str, str, list]] = {}
+    for node_id, data in graph.nodes(data=True):
+        c = classifications.get(node_id)
+        if c is None or c.env_tag not in NONPROD_LEAK_ENVS:
+            continue
+        sf = data.get("source_file")
+        if sf and sf not in file_env:
+            file_env[sf] = (node_id, c.env_tag, c.reasons)
+
+    findings: list[Finding] = []
+    for source_file, (node_id, env, reasons) in file_env.items():
+        path = Path(source_file)
+        if not path.is_absolute():
+            path = repo_root / source_file
+        if not path.exists():
+            continue
+        try:
+            lines = path.read_text(encoding="utf-8", errors="ignore").splitlines()
+        except OSError:
+            continue
+
+        match = None
+        for i, line in enumerate(lines, 1):
+            stripped = line.strip()
+            # Skip the DEFINITION of a db method (def save / class ...) — we want
+            # non-prod code that CALLS a DB op, not code that declares one.
+            if stripped.startswith(("def ", "class ", "#")):
+                continue
+            for p in patterns:
+                m = p.search(line)
+                if m:
+                    match = (i, m.group(0).strip(), stripped[:120])
+                    break
+            if match:
+                break
+        if not match:
+            continue
+
+        # Require positive prod evidence — an explicit prod config marker or a
+        # prod-identifier/database_url literal — before calling this a leak.
+        # A plain unit test with no config text of its own (e.g. test_models.py,
+        # relying on an ambient pytest `db` fixture) has neither, and shouldn't
+        # be flagged just for calling `.save()`.
+        text = "\n".join(lines)
+        has_prod_config = any(m in text for m in prod_config_markers)
+        has_prod_identifier = any(p.search(text) for p in prod_identifier_patterns)
+        has_database_url = bool(database_url_re and database_url_re.search(text))
+        if not (has_prod_config or has_prod_identifier or has_database_url):
+            continue
+
+        line_no, op, snippet = match
+        findings.append(
+            Finding(
+                rule="b",
+                rule_name="non_prod_code_performs_db_operation",
+                severity="high",
+                confidence=_confidence_from_reasons(reasons),
+                source_node=summarize_node(graph, node_id),
+                target_node={
+                    "label": "database (ORM/driver access)",
+                    "source_file": None,
+                    "source_location": None,
+                },
+                paths=[],
+                evidence={
+                    "db_operation": op,
+                    "line": line_no,
+                    "snippet": snippet,
+                    "source_env": env,
+                    "why_non_prod": reasons,
+                    "detection": "content",
+                },
+                suggested_fix=(
+                    "This non-prod code runs a database operation against whatever "
+                    "DB is configured at runtime — in prod that's the production "
+                    "database. Point it at a dedicated test/local database (fixture "
+                    "or transaction rollback), and never let seed/dev scripts default "
+                    "to the prod connection."
+                ),
+            )
+        )
 
     return findings
 
@@ -423,6 +564,19 @@ def evaluate_all_rules(
 
     findings: list[Finding] = []
     findings.extend(evaluate_rule_a(rim))
-    findings.extend(evaluate_rule_b(rim, max_paths, max_path_length))
+
+    b_graph = evaluate_rule_b(rim, max_paths, max_path_length)
+    findings.extend(b_graph)
+
+    # Content fallback for ORM/framework DB access the graph can't represent.
+    # Dedupe by source_file so a leak already caught structurally (explicit
+    # client, e.g. flatapp) isn't reported twice.
+    graph_b_files = {f.source_node.get("source_file") for f in b_graph}
+    b_content = [
+        f for f in evaluate_rule_b_content(rim)
+        if f.source_node.get("source_file") not in graph_b_files
+    ]
+    findings.extend(b_content)
+
     findings.extend(evaluate_rule_c(rim, max_paths, max_path_length))
     return findings

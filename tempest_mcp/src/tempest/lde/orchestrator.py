@@ -8,6 +8,7 @@ from pathlib import Path
 
 from tempest.config import load_config
 from tempest.paths import RepoPaths
+from tempest.rie.augment import augment_graph_with_ast
 from tempest.rie.boundary import classify_graph
 from tempest.rie.graph_loader import GraphLoadError, load_graph
 from tempest.lde.policy import evaluate_all_rules
@@ -39,6 +40,7 @@ def run_detection(repo_root: str | Path) -> Report:
     from tempest.rim import RepositoryIntelligenceModel
 
     config = load_config(repo_root)
+    graph = augment_graph_with_ast(graph, repo_root, config)
     classifications = classify_graph(graph, config, repo_root)
     
     rim = RepositoryIntelligenceModel(
