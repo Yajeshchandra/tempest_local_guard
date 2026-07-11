@@ -172,12 +172,46 @@ PATTERNS: dict[str, dict] = {
 
     # ── P-08: IDE Artifact Secrets ───────────────────────────────────────────
     "P-08-IDE-ENV-VALUE": {
-        "regex": r'(?i)"(?:value|secret|token|password|key)"\s*:\s*"([A-Za-z0-9\-_=+/]{16,})"',
+        # Only real secret-bearing JSON keys — NOT generic "value"/"key", which
+        # match ordinary request-field metadata (Postman collections, OpenAPI
+        # specs) and produced dozens of false positives per file.
+        "regex": r'(?i)"(?:secret|token|password|passwd|api[_\-]?key|access[_\-]?key|client[_\-]?secret|private[_\-]?key)"\s*:\s*"([A-Za-z0-9\-_=+/]{16,})"',
         "description": "Secret value found inside IDE configuration artifact",
         "severity": "MEDIUM",
         "type": "P-08",
     },
 }
+
+
+# Bare `password = "..."` is the weakest P-01 signal — test fixtures are full of
+# dummy passwords. Suppress obvious placeholders and low-entropy values so they
+# don't bury the real secrets. Real random/prod passwords clear the entropy floor.
+_PLACEHOLDER_SECRET_VALUES: frozenset[str] = frozenset({
+    "password", "passw0rd", "password1", "password123", "changeme", "change_me",
+    "changethis", "secret", "test", "testtest", "testpass", "example", "admin",
+    "root", "letmein", "myprecious", "foobar", "foobarbaz", "foobarbaz123",
+    "hunter2", "123456", "qwerty", "yourpassword", "your_password", "placeholder",
+    "dummy", "notarealpassword",
+})
+_MIN_PASSWORD_ENTROPY: float = 3.5
+
+# Local/dev DB hosts. A connection string to one of these, with dummy creds, is
+# a local/CI setup (docker-compose, GitHub Actions), not a prod-credential leak.
+_LOCAL_DB_HOSTS: frozenset[str] = frozenset({"localhost", "127.0.0.1", "0.0.0.0", "::1"})
+_DSN_CREDS_RE = re.compile(r'://([^:@/\s]+):([^@/\s]+)@([^:/\s"\']+)')
+
+
+def _is_dummy_local_dsn(uri: str) -> bool:
+    """True if a DB connection string points at a local/bare host with dummy
+    credentials (user==password, or a placeholder password). Requires BOTH so a
+    real prod DSN (distinct creds, dotted prod host) is never suppressed."""
+    m = _DSN_CREDS_RE.search(uri)
+    if not m:
+        return False
+    user, pw, host = m.group(1), m.group(2), m.group(3)
+    local_host = host.lower() in _LOCAL_DB_HOSTS or "." not in host  # bare docker-service name
+    dummy_cred = user == pw or pw.lower() in _PLACEHOLDER_SECRET_VALUES
+    return local_host and dummy_cred
 
 
 # ── Compiled pattern cache (compile once, reuse on every line) ────────────────
@@ -244,6 +278,19 @@ def scan_line(line: str, line_number: int, file_path: str) -> list[dict]:
 
         # Use the first capture group if present, else the whole match
         raw_match = match.group(1) if match.lastindex and match.lastindex >= 1 else match.group(0)
+
+        # Bare-password gate: drop placeholder / low-entropy dummy passwords.
+        # ponytail: entropy+denylist only. A weak password in a prod-referencing
+        # file is missed — upgrade path: pass a file-level prod-identifier flag.
+        if name == "P-01-HARDCODED-PASSWORD":
+            val = raw_match.strip()
+            if val.lower() in _PLACEHOLDER_SECRET_VALUES or calculate_entropy(val) < _MIN_PASSWORD_ENTROPY:
+                continue
+
+        # DB-URI gate: skip local/CI connection strings with dummy creds
+        # (postgres:postgres@db, ...@localhost) — not a prod-credential leak.
+        if name.startswith("P-01-DB-URI") and _is_dummy_local_dsn(match.group(0)):
+            continue
 
         # De-duplicate: one finding per (type, line) — same type cannot appear twice on same line
         dedup_key = f"{meta['type']}:{line_number}"

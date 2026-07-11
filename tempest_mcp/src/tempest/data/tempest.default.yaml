@@ -71,6 +71,9 @@ boundary:
       - "scratch*"
       - "playground*"
       - "backfill*"
+      - "*_backfill.*"
+      - "*_migrate_data.*"
+      - "manage_*"
       - "*.ipynb"
 
   # (3) Folder-naming conventions. Matched as a path-segment substring
@@ -88,9 +91,13 @@ boundary:
       - "test"
       - "tests"
       - "__tests__"
+      - "__mocks__"
       - "spec"
       - "specs"
       - "e2e"
+      - "e2e-tests"
+      - "cypress"
+      - "integration"
       - "fixtures"
       - "factories"
       - "testdata"
@@ -98,12 +105,16 @@ boundary:
       - "seed"
       - "seeds"
     dev:
+      # ponytail: deliberately NOT adding admin/internal/ops/bin — prod-ambiguous
+      # (Go `internal/` is prod core, admin panels ship to prod). Only
+      # unambiguous non-prod segments here to avoid classification false positives.
       - "dev"
       - "development"
       - "local"
       - "sandbox"
       - "scripts"
       - "tooling"
+      - "debug"
       - "examples"
       - "samples"
       - "notebooks"
@@ -377,7 +388,8 @@ max_path_length: 50
 scanner_patterns:
   aws_arn: 'arn:aws[a-zA-Z-]*:[a-z0-9-]+:[a-z0-9-]*:[0-9]{0,12}:[^\s<>''"`\\]+'
   aws_s3_uri: 's3://[a-z0-9][a-z0-9.-]{1,61}[a-z0-9](?:/[^\s<>''"`\\]*)?'
-  database_url: '(?:(?:postgres(?:ql)?|mysql|mariadb|mongodb(?:\+srv)?|redis|rediss|mssql|sqlserver)://|jdbc:[a-z0-9]+://)[^\s<>''"`\\]+'
+  database_url: '(?:(?:postgres(?:ql)?|mysql|mariadb|mongodb(?:\+srv)?|mssql|sqlserver)://|jdbc:[a-z0-9]+://)[^\s<>''"`\\]+'
+  broker_url: '(?:redis|rediss|amqp|amqps|kafka)://[^\s<>''"`\\]+'
   azure_resource_id: '/subscriptions/[0-9a-f-]{32,36}/resourceGroups/[^/\s<>''"`\\]+/providers/Microsoft\.[^/\s<>''"`\\]+/[^/\s<>''"`\\]+/[^/\s<>''"`\\]+'
   azure_storage_url: 'https?://[a-z0-9]{3,24}\.(?:blob|dfs|file|queue|table)\.core\.windows\.net'
   azure_key_vault: 'https?://[a-z0-9-]{3,24}\.vault\.azure\.net'

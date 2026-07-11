@@ -239,6 +239,7 @@ def _classify_boundary(
     if findings:
         mapping = {
             "database_url": "database",
+            "broker_url": "messaging",
             "aws_s3_uri": "storage",
             "azure_storage_url": "storage",
             "gcp_gcs_uri": "storage",
