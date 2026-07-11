@@ -96,6 +96,26 @@ SUPPORTED_EXTENSIONS: frozenset[str] = frozenset({
     "",                                                            # files like .env (no extension)
 })
 
+# Config-file types where a production-resource REFERENCE (not a credential) is
+# itself a leak when the file is non-prod: a staging manifest / dev compose that
+# points DATABASE_URL / DB_HOST / bucket / broker at a prod resource. Complements
+# the credential regexes (which need embedded user:pass) — this catches the bare
+# prod-identifier references graphify never sees (config files aren't in the graph).
+CONFIG_FILE_EXTENSIONS: frozenset[str] = frozenset({
+    ".yml", ".yaml", ".toml", ".ini", ".cfg", ".config", ".properties",
+    ".tf", ".tfvars",
+})
+# Resource-reference keys — a prod identifier in one of these values points at a
+# real backing resource, not incidental prose. Unanchored substring match (not
+# \b-bounded): config keys are commonly SNAKE_CASE (REDIS_URL, S3_BUCKET) where
+# `_` is a \w character and blocks a \b boundary before the keyword. Safe
+# without boundaries because a P-09 finding also requires a prod-identifier
+# regex match on the same line — the AND keeps this precise.
+_CONFIG_RESOURCE_KEY_RE = re.compile(
+    r'(?i)(url|uri|host|hostname|server|endpoint|bucket|broker|dsn|database|'
+    r'db|connection|conn|image|addr|address|backend|datasource)'
+)
+
 # Minimum token length for entropy checking (short tokens = too many false positives)
 MIN_ENTROPY_TOKEN_LENGTH = 10
 
@@ -177,6 +197,12 @@ class PayloadEngine:
         P-08  Secrets in IDE configuration artifacts
     """
 
+    def __init__(self, prod_identifiers: list[str] | None = None) -> None:
+        """prod_identifiers: boundary.prod_identifier_patterns from the tempest
+        config, used by the config-file prod-reference check (P-09). Optional so
+        existing callers — `PayloadEngine()` — keep working unchanged."""
+        self._prod_id_res = [re.compile(p, re.IGNORECASE) for p in (prod_identifiers or [])]
+
     # ── Public Interface (called by orchestrator.py) ──────────────────────────
 
     def scan(self, file_paths: list[str]) -> list[dict]:
@@ -196,6 +222,10 @@ class PayloadEngine:
         for path in file_paths:
             try:
                 findings = self._route_file(path)
+                # Config files aren't in the code graph, so structural Rule (a)
+                # never sees them — catch prod-resource references here (P-09).
+                if self._is_config_file(path) and Path(path).exists():
+                    findings = findings + self._scan_config_prod_reference(path)
                 all_findings.extend(findings)
             except Exception as e:
                 # Never crash the git hook — log and continue
@@ -585,6 +615,54 @@ class PayloadEngine:
     def _is_fixture_file(self, path_str: str) -> bool:
         """Return True if the path looks like a test fixture or seed data file."""
         return any(pattern in path_str for pattern in FIXTURE_PATTERNS)
+
+    def _is_config_file(self, file_path: str) -> bool:
+        """Config/IaC files whose values point at backing resources (yaml/toml/
+        ini/tf, Dockerfile, .env)."""
+        p = Path(file_path)
+        name = p.name.lower()
+        return (
+            p.suffix.lower() in CONFIG_FILE_EXTENSIONS
+            or name.startswith("dockerfile")
+            or name.startswith(".env")
+        )
+
+    def _scan_config_prod_reference(self, file_path: str) -> list[dict]:
+        """P-09: a non-prod config file that points a resource key (DATABASE_URL,
+        DB_HOST, bucket, broker, image, ...) at a PROD identifier
+        (prod-db.internal, prod-user-uploads, redis://prod-redis, ...). Env-blind
+        here; scan.py drops PROD-file hits (a prod config referencing prod is
+        expected, not a leak)."""
+        if not self._prod_id_res:
+            return []
+        lines = self._read_file_lines(file_path)
+        if lines is None:
+            return []
+        findings: list[dict] = []
+        for i, line in enumerate(lines, start=1):
+            if line.lstrip().startswith(_COMMENT_PREFIXES):
+                continue
+            if not _CONFIG_RESOURCE_KEY_RE.search(line):
+                continue
+            for rx in self._prod_id_res:
+                m = rx.search(line)
+                if m:
+                    findings.append({
+                        "file": file_path,
+                        "line": i,
+                        "type": "P-09",
+                        "severity": "HIGH",
+                        "match_redacted": m.group(0)[:32],
+                        "description": (
+                            "Non-prod config references a production resource "
+                            f"('{m.group(0)[:40]}')"
+                        ),
+                        "source": "payload",
+                        "subtype": "config-prod-ref",
+                        "entropy": 0.0,
+                    })
+                    break
+        return findings
 
     # ── File Reader ───────────────────────────────────────────────────────────
 

@@ -58,7 +58,8 @@ def run_content_scan(repo_root: str | Path) -> dict[str, Any]:
     config = load_config(str(root))
 
     files = _iter_repo_files(root)
-    raw_findings = PayloadEngine().scan(files)
+    prod_identifiers = config.get("boundary", {}).get("prod_identifier_patterns", [])
+    raw_findings = PayloadEngine(prod_identifiers=prod_identifiers).scan(files)
 
     findings: list[dict[str, Any]] = []
     for f in raw_findings:
@@ -71,6 +72,10 @@ def run_content_scan(repo_root: str | Path) -> dict[str, Any]:
         entry = dict(f)
         entry["file"] = rel
         entry["env"] = classify_env_for_path(rel, config)
+        # A prod config that references a prod resource is expected, not a leak —
+        # the P-09 check is only meaningful for non-prod config files.
+        if entry.get("subtype") == "config-prod-ref" and entry["env"] == "PROD":
+            continue
         findings.append(entry)
 
     report = {
