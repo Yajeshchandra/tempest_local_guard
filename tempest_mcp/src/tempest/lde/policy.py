@@ -301,25 +301,24 @@ def _iter_non_prod_source_files(
 def evaluate_rule_a(
     rim: RepositoryIntelligenceModel,
 ) -> list[Finding]:
-    """Mostly a classification-informed grep, not a traversal: scans every
-    non-prod source file's string literals for known_prod_identifiers or
-    prod_identifier_patterns/entropy matches.
-    """
-    graph, classifications, config, repo_root = rim.graph, rim.classifications, rim.config, rim.repo_root
+    """Uses PayloadEngine to scan non-prod files for hardcoded secrets, PII, etc."""
+    graph, classifications, repo_root = rim.graph, rim.classifications, rim.repo_root
     
-    findings: list[Finding] = []
-    repo_root = Path(repo_root)
-    boundary_cfg = config.get("boundary", {})
-    patterns = [re.compile(p, re.IGNORECASE) for p in boundary_cfg.get("prod_identifier_patterns", [])]
-    secret_patterns = [re.compile(p, re.IGNORECASE) for p in config.get("secret_patterns", {}).values()]
-    known_identifiers = [k.lower() for k in config.get("known_prod_identifiers", [])]
-    min_entropy = boundary_cfg.get("min_secret_entropy", 3.0)
-
-    findings: list[Finding] = []
-    seen: set[tuple[str, str]] = set()  # (source_file, literal) dedup
-
+    from tempest.payload.engine import PayloadEngine
+    engine = PayloadEngine()
+    
     non_prod_files = _iter_non_prod_source_files(graph, classifications)
-
+    abs_paths = []
+    repo_path = Path(repo_root)
+    for f in non_prod_files:
+        p = Path(f)
+        if not p.is_absolute():
+            p = repo_path / p
+        if p.exists():
+            abs_paths.append(str(p))
+            
+    payload_findings = engine.scan(abs_paths)
+    
     # Map source_file -> a representative non-prod node id (for reporting).
     file_to_node: dict[str, str] = {}
     for node_id, data in graph.nodes(data=True):
@@ -330,75 +329,44 @@ def evaluate_rule_a(
         if sf and sf not in file_to_node:
             file_to_node[sf] = node_id
 
-    for source_file in non_prod_files:
-        path = Path(source_file)
-        if not path.is_absolute():
-            path = repo_root / source_file
-        if not path.exists():
-            continue
+    findings: list[Finding] = []
+    for pf in payload_findings:
         try:
-            text = path.read_text(encoding="utf-8", errors="ignore")
-        except OSError:
-            continue
-
-        for match in _STRING_LITERAL_RE.finditer(text):
-            literal = match.group(2)
-            if not literal or len(literal) < 6:
-                continue
-
-            key = (source_file, literal)
-            if key in seen:
-                continue
-
-            matched_pattern = any(p.search(literal) for p in patterns)
-            matched_known = any(k in literal.lower() for k in known_identifiers)
-            matched_secret = any(p.search(literal) for p in secret_patterns)
-            is_secret_like = _shannon_entropy(literal) >= min_entropy and any(
-                c.isdigit() for c in literal
-            ) and any(c.isalpha() for c in literal)
-
-            if not (matched_pattern or matched_known or matched_secret):
-                continue
-            # Require the literal to also look secret/identifier-like (not
-            # just any string that happens to contain "prod") OR to be a
-            # connection-string-shaped match, OR to be a direct secret hit.
-            looks_like_connection_or_key = bool(
-                re.search(r"://|@|sk_live|api[_-]?key|secret|password|token", literal, re.IGNORECASE)
+            # Need a relative path for matching node source_file
+            sf = Path(pf["file"]).relative_to(repo_path).as_posix()
+        except ValueError:
+            sf = pf["file"]
+            
+        node_id = file_to_node.get(sf)
+        source_summary = (
+            summarize_node(graph, node_id)
+            if node_id
+            else {"id": None, "label": None, "source_file": sf, "source_location": None}
+        )
+        # Re-attach the line number found by payload engine
+        if source_summary and pf.get("line"):
+            source_summary["source_location"] = f"L{pf['line']}"
+        
+        findings.append(
+            Finding(
+                rule="a",
+                rule_name=pf.get("type", "payload_scan_p-01"),
+                severity=pf.get("severity", "HIGH").upper(),
+                source_node=source_summary,
+                target_node=None,
+                paths=[],
+                evidence={
+                    "matched_literal": pf.get("match_redacted", ""),
+                    "description": pf.get("description", ""),
+                    "entropy": pf.get("entropy", 0.0),
+                },
+                suggested_fix=(
+                    "Remove this hardcoded production identifier/credential from "
+                    "non-prod code. Load it from a secrets manager or environment "
+                    "variable scoped to prod deploys only."
+                ),
             )
-            if not (matched_known or matched_secret or looks_like_connection_or_key or is_secret_like):
-                continue
-
-            seen.add(key)
-            node_id = file_to_node.get(source_file)
-            source_summary = (
-                summarize_node(graph, node_id)
-                if node_id
-                else {"id": None, "label": None, "source_file": source_file, "source_location": None}
-            )
-
-            findings.append(
-                Finding(
-                    rule="a",
-                    rule_name="hardcoded_prod_secret_in_non_prod_code",
-                    severity="high",
-                    source_node=source_summary,
-                    target_node=None,
-                    paths=[],
-                    evidence={
-                        "matched_literal": literal,
-                        "matched_known_identifier": matched_known,
-                        "matched_pattern": matched_pattern,
-                        "matched_secret_pattern": matched_secret,
-                        "entropy": round(_shannon_entropy(literal), 2),
-                    },
-                    suggested_fix=(
-                        "Remove this hardcoded production identifier/credential from "
-                        "non-prod code. Load it from a secrets manager or environment "
-                        "variable scoped to prod deploys only, and rotate the credential "
-                        "since it has been committed to a non-prod-visible file."
-                    ),
-                )
-            )
+        )
 
     return findings
 

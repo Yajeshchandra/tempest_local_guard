@@ -47,7 +47,7 @@ def run_detection(repo_root: str | Path) -> Report:
         config=config,
         repo_root=str(repo_root)
     )
-    
+
     findings: list = evaluate_all_rules(rim)
 
     duration = time.monotonic() - start
